@@ -16,5 +16,6 @@ describe('equipment catalog', () => {
     expect(new Set(allItems.map((item) => item.code)).size).toBe(50);
     expect(armorItems.every((item) => item.type === 'armor' && item.defense > 0 && item.attack === 0)).toBe(true);
     expect(weaponItems.every((item) => item.type === 'weapon' && item.attack > 0 && item.defense === 0)).toBe(true);
+    expect(new Set(weaponItems.map((item) => item.weaponStyle))).toEqual(new Set(['sword', 'dagger', 'hammer', 'staff', 'bow']));
   });
 });

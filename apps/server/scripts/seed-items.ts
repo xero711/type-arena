@@ -1,4 +1,5 @@
-import { equipmentItems } from '@type-arena/game-data';
+import { equipmentItems, itemRarities } from '@type-arena/game-data';
+import { inArray, sql } from 'drizzle-orm';
 import { db, pool } from '../src/database/client.js';
 import { items } from '../src/database/schema.js';
 
@@ -17,7 +18,20 @@ try {
     attack: item.attack,
     defense: item.defense,
     enabled: true,
-  }))).onConflictDoNothing({ target: items.code });
+  }))).onConflictDoUpdate({
+    target: items.code,
+    set: {
+      name: sql`excluded.name`,
+      description: sql`excluded.description`,
+      type: sql`excluded.type`,
+      rarity: sql`excluded.rarity`,
+      attack: sql`excluded.attack`,
+      defense: sql`excluded.defense`,
+      enabled: true,
+    },
+  });
+  const retiredWeapons = itemRarities.flatMap((rarity) => [`weapon_${rarity}_spear`, `weapon_${rarity}_axe`]);
+  await db.update(items).set({ enabled: false }).where(inArray(items.code, retiredWeapons));
   console.info(`装備アイテム ${equipmentItems.length} 件を登録しました。`);
 } finally {
   await pool?.end();

@@ -18,10 +18,10 @@ pnpm --filter @type-arena/server build
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-home-server.ps1
 ```
 
-`/health`の`database`が`online`、`/ready`の`status`が`ready`であることを確認します。
+`/api/health`または`/health`の`database`が`online`、`/ready`の`status`が`ready`であることを確認します。
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:3001/health
+Invoke-RestMethod http://127.0.0.1:3001/api/health
 Invoke-RestMethod http://127.0.0.1:3001/ready
 ```
 

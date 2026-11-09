@@ -9,14 +9,16 @@ export async function buildApp() {
   await app.register(cors, { origin: config.WEB_ORIGIN, credentials: true });
   await app.register(profileRoutes);
 
-  app.get('/health', async () => {
+  const healthCheck = async () => {
     let database: 'online' | 'offline' | 'not-configured' = 'not-configured';
     if (config.DATABASE_URL) {
       try { database = await checkDatabase() ? 'online' : 'offline'; }
       catch { database = 'offline'; }
     }
     return { status: 'ok', service: 'type-arena-api', database };
-  });
+  };
+  app.get('/health', healthCheck);
+  app.get('/api/health', healthCheck);
 
   app.get('/ready', async (_request, reply) => {
     try {

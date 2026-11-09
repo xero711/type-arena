@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
-    "typecheck": "tsc -b"
+    "dev": "pnpm --filter @type-arena/game-data build && vite --host 0.0.0.0",
+    "build": "pnpm --filter @type-arena/game-data build && tsc -b && vite build",
+    "typecheck": "pnpm --filter @type-arena/game-data build && tsc -b"
   },
   "dependencies": {
     "@type-arena/game-data": "workspace:*",

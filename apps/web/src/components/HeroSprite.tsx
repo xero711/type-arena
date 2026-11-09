@@ -43,6 +43,14 @@ function WeaponLayer({ weapon }: { weapon: EquipmentItem }) {
       <path d="M67 187L89 34L105 12L117 39L86 198Z" fill={metal}/><path d="M91 47L104 31L91 158Z" fill={trim} stroke="none"/>
       <path d="M49 178L103 190L96 205L44 193Z" fill={trim}/><path d="M70 194L54 238L69 245L87 199Z" fill={dark}/><path d="M51 236L77 246L72 255L48 247Z" fill={trim}/>
     </g>}
+    {style === 'dagger' && <g stroke={dark} strokeWidth="5" strokeLinejoin="miter">
+      <path d="M71 153L89 74L106 26L113 70L91 160Z" fill={metal}/><path d="M93 78L106 43L104 112Z" fill={trim} stroke="none"/>
+      <path d="M55 151L101 163L95 177L51 166Z" fill={trim}/><path d="M73 164L62 218L77 222L91 169Z" fill={dark}/><path d="M59 216L83 222L79 232L56 227Z" fill={trim}/>
+    </g>}
+    {style === 'hammer' && <g stroke={dark} strokeWidth="5" strokeLinejoin="miter">
+      <path d="M56 239L91 94L108 98L72 245Z" fill={dark}/><path d="M55 75L79 47L119 54L131 36L146 45L137 75L146 100L129 109L113 93L79 106Z" fill={metal}/>
+      <path d="M84 59L119 66L126 87L109 96L79 89Z" fill={trim}/><path d="M55 218L74 223L79 207L60 202Z" fill={trim}/>
+    </g>}
     {style === 'staff' && <g stroke={dark} strokeWidth="5" strokeLinejoin="miter">
       <path d="M50 232L102 43L117 48L65 237Z" fill={dark}/><path d="M55 210L69 214L73 202L59 198Z" fill={trim}/>
       <path d="M92 36L101 13L120 5L139 20L136 42L118 56L98 49Z" fill={metal}/><path d="M117 15L128 23L121 39L108 34Z" fill={trim}/>
@@ -50,14 +58,6 @@ function WeaponLayer({ weapon }: { weapon: EquipmentItem }) {
     {style === 'bow' && <g fill="none" strokeLinejoin="miter">
       <path d="M107 19Q30 126 107 232" stroke={dark} strokeWidth="17"/><path d="M105 22Q47 126 105 229" stroke={trim} strokeWidth="6"/><path d="M107 20L81 126L107 232" stroke={metal} strokeWidth="3"/>
       <path d="M50 130H138L123 119M138 130L123 141" stroke={trim} strokeWidth="6"/>
-    </g>}
-    {style === 'spear' && <g stroke={dark} strokeWidth="5" strokeLinejoin="miter">
-      <path d="M45 244L108 29L124 34L60 249Z" fill={dark}/><path d="M100 44L105 20L137 3L129 42L117 63Z" fill={metal}/><path d="M111 28L130 12L124 38Z" fill={trim}/>
-      <path d="M48 225L63 230L68 216L52 212Z" fill={trim}/>
-    </g>}
-    {style === 'axe' && <g stroke={dark} strokeWidth="5" strokeLinejoin="miter">
-      <path d="M49 244L94 76L111 80L67 250Z" fill={dark}/><path d="M91 51L118 20L148 17L146 58L133 82L111 95L91 78Z" fill={metal}/>
-      <path d="M120 28L141 25L139 54L125 70L109 68Z" fill={trim}/><path d="M48 224L65 228L69 214L52 210Z" fill={trim}/>
     </g>}
   </svg>;
 }

@@ -9,6 +9,12 @@ afterAll(async () => {
 });
 
 describe('authentication boundary', () => {
+  it('exposes the documented API health endpoint', async () => {
+    const response = await (await appPromise).inject({ method: 'GET', url: '/api/health' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'ok', service: 'type-arena-api' });
+  });
+
   it('accepts only a single bearer token in the authorization header', () => {
     expect(readBearerToken('Bearer signed-token')).toBe('signed-token');
     expect(readBearerToken('Basic dXNlcjpwYXNz')).toBeNull();

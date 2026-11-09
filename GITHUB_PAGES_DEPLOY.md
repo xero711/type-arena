@@ -18,4 +18,6 @@ GitHub Actionsが`main`へのpush時に型チェック、テスト、ビルド�
 
 APIの`WEB_ORIGIN`はPagesのホスト名（このサイトでは`https://xero-x.me`）に設定します。Firebase Admin秘密鍵と`DATABASE_URL`はGitHubへ登録せず、サーバーPCの`apps/server/.env`に設定します。
 
+現在、Firebase Admin SDK秘密鍵がサーバーPCへ保存されておらず、Tailscale Funnelも有効化待ちです。そのため、公開ページのCPU対戦は使えますが、ログイン済みオンライン機能はAPIへ接続できません。
+
 変数を追加したら、Actionsタブから **Build and deploy GitHub Pages → Run workflow** を実行すると再ビルドされます。サイトはサーバーが停止していても起動し、CPU戦を遊べます。

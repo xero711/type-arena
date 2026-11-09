@@ -4,6 +4,7 @@ import { pgEnum, pgTable, text, integer, boolean, timestamp, uniqueIndex, index,
 export const rarityEnum = pgEnum('item_rarity', ['normal', 'rare', 'super_rare', 'hyper_rare', 'ultimate_rare']);
 export const itemTypeEnum = pgEnum('item_type', ['weapon', 'armor', 'accessory']);
 export const matchResultEnum = pgEnum('match_result', ['win', 'lose', 'draw', 'disconnect']);
+export const matchModeEnum = pgEnum('match_mode', ['ranked', 'private']);
 
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => randomUUID()),
@@ -44,6 +45,7 @@ export const equipment = pgTable('equipment', {
 
 export const matches = pgTable('matches', {
   id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+  mode: matchModeEnum('mode').notNull().default('ranked'),
   playerOneId: text('player_one_id').notNull().references(() => users.id),
   playerTwoId: text('player_two_id').notNull().references(() => users.id),
   winnerId: text('winner_id').references(() => users.id),

@@ -2,7 +2,7 @@ export const itemRarities = ['normal', 'rare', 'super_rare', 'hyper_rare', 'ulti
 export type ItemRarity = (typeof itemRarities)[number];
 export type EquipmentSlot = 'armor' | 'weapon';
 export type ArmorStyle = 'light' | 'leather' | 'mail' | 'plate' | 'robe';
-export type WeaponStyle = 'sword' | 'staff' | 'bow' | 'spear' | 'axe';
+export type WeaponStyle = 'sword' | 'dagger' | 'hammer' | 'staff' | 'bow';
 
 export type EquipmentItem = {
   id: string;
@@ -38,10 +38,10 @@ const armorFamilies: { code: string; style: ArmorStyle; names: [string, string, 
 
 const weaponFamilies: { code: string; style: WeaponStyle; names: [string, string, string, string, string]; descriptions: string[] }[] = [
   { code: 'sword', style: 'sword', names: ['兵士の鉄剣', '蒼刃の騎士剣', '竜鱗の剣', '聖銀の剣', '創世の聖剣'], descriptions: ['まっすぐな刃を持つ片手剣。'] },
+  { code: 'dagger', style: 'dagger', names: ['狩人の短剣', '蒼刃の短剣', '竜牙の双短剣', '星影の暗殺刃', '世界影の神短剣'], descriptions: ['素早く振れる短い刃。'] },
+  { code: 'hammer', style: 'hammer', names: ['鍛冶屋の木槌', '青銅の戦鎚', '王砕きの戦鎚', '星落としの巨鎚', '天穹の神鎚'], descriptions: ['重い一撃を生む戦鎚。'] },
   { code: 'staff', style: 'staff', names: ['樫の枝杖', '月灯りの杖', '天文術師の杖', '星詠みの賢杖', '終焉を祓う杖'], descriptions: ['魔力を導く触媒の杖。'] },
   { code: 'bow', style: 'bow', names: ['狩人の短弓', '風追いの弓', '森王の弓', '天穹の弓', '夜明けの神弓'], descriptions: ['遠くの敵を狙うしなやかな弓。'] },
-  { code: 'spear', style: 'spear', names: ['銅柄の長槍', '砂裂きの槍', '雷鳴の槍', '竜牙の槍', '天空龍の槍'], descriptions: ['長い間合いを取れる槍。'] },
-  { code: 'axe', style: 'axe', names: ['木こりの手斧', '黒鉄の戦斧', '獅子王の大斧', '煉獄の戦斧', '世界樹の大斧'], descriptions: ['重い一撃を放つ斧。'] },
 ];
 
 const rarityOrder: ItemRarity[] = [...itemRarities];

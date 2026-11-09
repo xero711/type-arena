@@ -3,7 +3,7 @@ import type { QueueEntry } from '../matchmaking/matchmaker.js';
 
 export type BattlePlayer = Pick<QueueEntry, 'firebaseUid' | 'userId' | 'socketId' | 'displayName' | 'rating'>;
 export type BattlePlayerResult = { firebaseUid: string; userId: string; rating: number; wpm: number; accuracy: number; characters: number; mistakes: number; maxCombo: number };
-export type BattleOutcome = { matchId: string; winnerUid: string | null; loserUid: string | null; reason: 'knockout' | 'disconnect'; finishedAt: number; players: [BattlePlayerResult, BattlePlayerResult] };
+export type BattleOutcome = { matchId: string; winnerUid: string | null; loserUid: string | null; reason: 'knockout' | 'disconnect' | 'timeout'; finishedAt: number; players: [BattlePlayerResult, BattlePlayerResult] };
 export type BattleSubmitResult =
   | { ok: false; code: 'battle-not-started' | 'battle-finished' | 'not-a-player' | 'wrong-prompt' | 'incomplete-input' | 'too-fast' }
   | { ok: true; damage: number; snapshots: [BattleSnapshot, BattleSnapshot]; outcome: BattleOutcome | null };
@@ -18,24 +18,30 @@ export type BattleSnapshot = {
   opponentHp: number;
   prompt: Pick<Prompt, 'id' | 'text' | 'reading' | 'category'>;
   completedPrompts: number;
+  typed: string;
+  accuracy: number;
+  mistakes: number;
+  maxCombo: number;
   startsAt: number;
+  endsAt: number;
 };
 
 type PlayerState = { player: BattlePlayer; hp: number; promptIndex: number; promptStartedAt: number; lastKeyAt: number; totalCharacters: number; completedPrompts: number; currentInput: string; correctKeystrokes: number; mistakes: number; currentCombo: number; maxCombo: number };
-type Battle = { matchId: string; players: [PlayerState, PlayerState]; startsAt: number; promptOrder: Prompt[]; outcome: BattleOutcome | null };
+type Battle = { matchId: string; players: [PlayerState, PlayerState]; startsAt: number; endsAt: number; promptOrder: Prompt[]; outcome: BattleOutcome | null };
 
 /** サーバーがプロンプト順、入力検証、HP、攻撃力、勝敗を保持する。 */
 export class BattleManager {
   private readonly battles = new Map<string, Battle>();
   private readonly uidToMatch = new Map<string, string>();
 
-  create(matchId: string, players: [BattlePlayer, BattlePlayer], now = Date.now(), countdownMs = 3000): void {
+  create(matchId: string, players: [BattlePlayer, BattlePlayer], now = Date.now(), countdownMs = 3000, durationMs = 90_000): void {
     if (this.battles.has(matchId) || players[0].firebaseUid === players[1].firebaseUid) throw new Error('invalid-match');
     let seed = [...matchId].reduce((sum, char) => Math.imul(sum ^ char.charCodeAt(0), 16777619), 2166136261) >>> 0;
     const promptOrder = shuffled(prompts, () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; });
     const state: Battle = {
       matchId,
       startsAt: now + countdownMs,
+      endsAt: now + countdownMs + durationMs,
       promptOrder,
       outcome: null,
       players: players.map((player) => ({ player, hp: 100, promptIndex: 0, promptStartedAt: now + countdownMs, lastKeyAt: now + countdownMs - 20, totalCharacters: 0, completedPrompts: 0, currentInput: '', correctKeystrokes: 0, mistakes: 0, currentCombo: 0, maxCombo: 0 })) as [PlayerState, PlayerState],
@@ -57,6 +63,7 @@ export class BattleManager {
     const battle = this.battles.get(matchId);
     if (!battle || battle.outcome) return { ok: false, code: 'battle-finished' };
     if (now < battle.startsAt) return { ok: false, code: 'battle-not-started' };
+    if (now >= battle.endsAt) return { ok: false, code: 'battle-finished' };
     const player = battle.players.find((entry) => entry.player.firebaseUid === firebaseUid);
     if (!player) return { ok: false, code: 'not-a-player' };
     const prompt = this.promptFor(battle, player.promptIndex);
@@ -89,6 +96,7 @@ export class BattleManager {
     if (!battle) return { ok: false, code: 'battle-finished' };
     if (battle.outcome) return { ok: false, code: 'battle-finished' };
     if (now < battle.startsAt) return { ok: false, code: 'battle-not-started' };
+    if (now >= battle.endsAt) return { ok: false, code: 'battle-finished' };
     const ownIndex = battle.players.findIndex((entry) => entry.player.firebaseUid === firebaseUid);
     if (ownIndex < 0) return { ok: false, code: 'not-a-player' };
     const player = battle.players[ownIndex as 0 | 1];
@@ -128,6 +136,18 @@ export class BattleManager {
     battle.outcome = this.makeOutcome(battle, opponent?.player.firebaseUid ?? null, disconnectedUid, 'disconnect', now);
     this.uidToMatch.delete(disconnectedUid);
     if (opponent) this.uidToMatch.delete(opponent.player.firebaseUid);
+    return battle.outcome;
+  }
+
+  timeout(matchId: string, now = Date.now()): BattleOutcome | null {
+    const battle = this.battles.get(matchId);
+    if (!battle || battle.outcome || now < battle.endsAt) return null;
+    const [one, two] = battle.players;
+    const winner = one.hp === two.hp ? null : one.hp > two.hp ? one : two;
+    const loser = one.hp === two.hp ? null : one.hp > two.hp ? two : one;
+    battle.outcome = this.makeOutcome(battle, winner?.player.firebaseUid ?? null, loser?.player.firebaseUid ?? null, 'timeout', now);
+    this.uidToMatch.delete(one.player.firebaseUid);
+    this.uidToMatch.delete(two.player.firebaseUid);
     return battle.outcome;
   }
 
@@ -175,7 +195,12 @@ export class BattleManager {
       opponentHp: opponent.hp,
       prompt: { id: prompt.id, text: prompt.text, reading: prompt.reading, category: prompt.category },
       completedPrompts: own.completedPrompts,
+      typed: own.currentInput,
+      accuracy: this.accuracy(own),
+      mistakes: own.mistakes,
+      maxCombo: own.maxCombo,
       startsAt: battle.startsAt,
+      endsAt: battle.endsAt,
     };
   }
 }

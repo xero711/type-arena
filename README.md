@@ -1,6 +1,8 @@
 # TYPE ARENA
 
-タイピングで戦うオンライン対戦型RPGです。開発はWindows 11を想定し、静的フロントエンドはGitHub Pages、自宅PC側のAPIとデータベースは別プロセスとして運用する構成を目指します。
+タイピングで戦うオンライン対戦型RPGです。静的フロントエンドはGitHub Pages、自宅PCのAPIとPostgreSQLは別プロセスで運用します。
+
+公開サイト: [https://xero-x.me/type-arena/](https://xero-x.me/type-arena/)
 
 ## 現在の状態
 
@@ -8,13 +10,14 @@
 - 入力速度・正確率・勝敗のローカル保存
 - React、TypeScript、Vite、PixiJS、Zustandを含むWebワークスペース
 - 共通の問題文・タイピング判定パッケージ
-- Fastify APIのヘルスチェックとDrizzle ORMによるPostgreSQLスキーマ・初回マイグレーション
-- Firebase Googleログイン用クライアントとAdmin IDトークン検証、認証必須プロフィールAPI
-- 認証済みSocket.IO接続、オンライン待機・対戦画面、自動マッチング、サーバー側のキー入力検証・正確率/コンボ集計・攻撃計算・勝敗判定
-- 対戦結果、Eloレート変動、条件付きコイン報酬、コイン台帳のトランザクション保存
+- Windows 11上のPostgreSQLとAPI。ローカルDBへマイグレーション適用済み
+- Firebase Googleログイン用クライアントと、IDトークン検証・プロフィール同期のサーバーコード
+- サーバー権威型オンライン対戦の基盤、90秒制限、ランクマッチ、6文字のプライベートコード、15秒の再接続猶予
+- ランク戦の結果・レート・コイン台帳を保存する処理。プライベート戦は結果のみ保存し、レートとコインは変動しない
+- 5レアリティ×5カテゴリーの武器、5種類の防具を各レアリティに用意し、勇者の装備表示へ反映
 - GitHub Pages向けのビルド設定
 
-Googleログインとプロフィール同期コードは用意しましたが、実際の認証にはFirebaseプロジェクト設定が必要です。オンライン結果のDB保存コードは実装済みですが、PostgreSQLが開発環境にないため、実DBへのマイグレーションと対戦決済の統合確認は未実施です。対戦の再接続猶予、ランキング、ガチャ/装備などの経済機能も未実装です。CPU戦の戦績はこのブラウザーのlocalStorageに保存され、サーバーへは送信されません。
+Googleログイン画面と公開Web設定は動作確認済みです。Admin SDK秘密鍵のダウンロードがこのPCに届いておらず、サーバーでのトークン検証とプロフィール同期はまだ有効化できていません。Tailscale Funnelも未承認のため、公開サイトから自宅APIへは接続できません。ガチャ、オンライン所持品・装備の保存、ランキング、プロフィール統計、オンライン対戦の2ブラウザー統合確認は未完成です。CPU戦の装備と戦績はブラウザーのlocalStorageに保存されます。
 
 ## 開発を始める
 
@@ -33,6 +36,8 @@ APIは別のターミナルで `pnpm --filter @type-arena/server dev` を実行�
 
 ```powershell
 pnpm --filter @type-arena/web build
+pnpm typecheck
+pnpm test
 ```
 
 ## ディレクトリ
@@ -45,4 +50,4 @@ packages/typing-engine/   タイピング判定ロジック
 
 ## 公開
 
-GitHub Pages用のCI設定を `.github/workflows/pages.yml` に置いています。リポジトリ設定でPagesの公開元をGitHub Actionsにし、Actionsの書き込み権限を許可してください。秘密情報をコミットしないでください。
+GitHub Pages用のCI設定を `.github/workflows/pages.yml` に置いています。`main`へのpushで型チェック、テスト、ビルド、デプロイを行います。サーバーのAdmin秘密鍵とDBパスワードはコミットしないでください。詳しくは[Windowsセットアップ](SETUP_WINDOWS.md)、[サーバー運用](docs/SERVER_OPERATION.md)、[Firebase設定](FIREBASE_SETUP.md)、[Tailscale Funnel](TAILSCALE_SETUP.md)を参照してください。

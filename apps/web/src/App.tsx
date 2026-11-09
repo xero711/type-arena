@@ -40,7 +40,7 @@ function readHeroEquipment(): EquipmentLoadout {
     const migrated: Record<string, EquipmentLoadout> = {
       starter: defaultEquipment,
       knight: { armorId: 'armor_hyper_rare_guard', weaponId: 'weapon_hyper_rare_sword' },
-      flame: { armorId: 'armor_ultimate_rare_plate', weaponId: 'weapon_ultimate_rare_axe' },
+      flame: { armorId: 'armor_ultimate_rare_plate', weaponId: 'weapon_ultimate_rare_hammer' },
     };
     return legacy ? migrated[legacy] ?? defaultEquipment : defaultEquipment;
   } catch { return defaultEquipment; }

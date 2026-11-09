@@ -42,6 +42,31 @@ describe('server-authoritative battle', () => {
     expect(battle.submit('match-2', 'uid-a', 'p1', now)).toMatchObject({ ok: false, code: 'battle-finished' });
   });
 
+  it('includes the players partial input in a resumable server snapshot', () => {
+    const battle = new BattleManager();
+    battle.create('match-resume', players, 0, 0);
+    const initial = battle.snapshot('match-resume', 'uid-a')!;
+    const nextKey = prompts.find((prompt) => prompt.id === initial.prompt.id)!.romaji[0][0];
+    battle.typeKey('match-resume', 'uid-a', initial.prompt.id, nextKey, 20);
+    expect(battle.snapshot('match-resume', 'uid-a')).toMatchObject({
+      typed: nextKey,
+      accuracy: 100,
+      mistakes: 0,
+      maxCombo: 1,
+    });
+  });
+
+  it('decides a 90 second style timeout from remaining HP', () => {
+    const battle = new BattleManager();
+    battle.create('match-timeout', players, 0, 0);
+    const view = battle.snapshot('match-timeout', 'uid-a')!;
+    const answer = prompts.find((prompt) => prompt.id === view.prompt.id)!.romaji[0];
+    [...answer].forEach((char, index) => battle.typeKey('match-timeout', 'uid-a', view.prompt.id, char, 20 + index * 20));
+    battle.submit('match-timeout', 'uid-a', view.prompt.id, Math.max(answer.length * 40, answer.length * 20) + 100);
+    expect(battle.timeout('match-timeout', 89_999)).toBeNull();
+    expect(battle.timeout('match-timeout', 90_000)).toMatchObject({ winnerUid: 'uid-a', loserUid: 'uid-b', reason: 'timeout' });
+  });
+
   it('awards the connected player a forfeit win when an opponent disconnects', () => {
     const battle = new BattleManager();
     battle.create('match-3', players, 0, 0);
