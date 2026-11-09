@@ -1,0 +1,14 @@
+{
+  "name": "type-arena",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["apps/web", "apps/server", "packages/*"],
+  "scripts": {
+    "dev": "pnpm --filter @type-arena/web dev",
+    "build": "pnpm --filter @type-arena/web build",
+    "typecheck": "pnpm --filter @type-arena/web typecheck && pnpm --filter @type-arena/typing-engine typecheck && pnpm --filter @type-arena/server typecheck",
+    "test": "pnpm --filter @type-arena/typing-engine test && pnpm --filter @type-arena/server test"
+  },
+  "engines": { "node": ">=20.19.0" }
+}

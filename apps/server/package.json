@@ -1,0 +1,34 @@
+{
+  "name": "@type-arena/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@type-arena/game-data": "workspace:*",
+    "@fastify/cors": "^10.0.1",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.2.0",
+    "firebase-admin": "^14.5.0",
+    "pg": "^8.23.1",
+    "socket.io": "^4.8.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.19.2",
+    "socket.io-client": "^4.8.1",
+    "typescript": "~5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
