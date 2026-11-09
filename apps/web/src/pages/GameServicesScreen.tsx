@@ -13,6 +13,31 @@ type MatchRecord = { matchId: string; mode: string; result: 'win' | 'lose' | 'dr
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 const rarityOrder: ItemRarity[] = ['normal', 'rare', 'super_rare', 'hyper_rare', 'ultimate_rare'];
+const gachaOdds: Record<ItemRarity, string> = {
+  normal: '55%',
+  rare: '28%',
+  super_rare: '12%',
+  hyper_rare: '4%',
+  ultimate_rare: '1%',
+};
+
+type PendingGacha = { count: 1 | 10; key: string };
+
+function pendingGachaStorageKey(uid: string) {
+  return `type-arena:gacha-pending:${uid}`;
+}
+
+function readPendingGacha(uid: string): PendingGacha | null {
+  try {
+    const stored = localStorage.getItem(pendingGachaStorageKey(uid));
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as Partial<PendingGacha>;
+    if ((parsed.count !== 1 && parsed.count !== 10) || typeof parsed.key !== 'string' || !/^[\da-f-]{36}$/i.test(parsed.key)) return null;
+    return { count: parsed.count, key: parsed.key };
+  } catch {
+    return null;
+  }
+}
 
 async function apiRequest<T>(path: string, user: User | null, init: RequestInit = {}): Promise<T> {
   const token = user ? await user.getIdToken() : null;
@@ -53,6 +78,7 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
   const [lastPull, setLastPull] = useState<EquipmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [retryCount, setRetryCount] = useState<1 | 10 | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -84,17 +110,41 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    setRetryCount(user ? readPendingGacha(user.uid)?.count ?? null : null);
+  }, [user]);
+
   const pull = async (count: 1 | 10) => {
     if (!user) { setError('Googleログインするとガチャを利用できます。'); return; }
+    const storageKey = pendingGachaStorageKey(user.uid);
+    const pending = readPendingGacha(user.uid);
+    if ((retryCount !== null && retryCount !== count) || (pending && pending.count !== count)) {
+      setError('前回の召喚結果が未確認です。同じ回数のボタンから再試行してください。');
+      return;
+    }
+    const idempotencyKey = pending?.key ?? crypto.randomUUID();
+    localStorage.setItem(storageKey, JSON.stringify({ count, key: idempotencyKey } satisfies PendingGacha));
+    setRetryCount(count);
     setBusy(true); setError(''); setLastPull([]);
     try {
-      const response = await apiRequest<{ items: Array<Pick<EquipmentItem, 'code'>>; coins: number }>('/api/gacha/pull', user, { method: 'POST', body: JSON.stringify({ count }) });
+      const response = await apiRequest<{ items: Array<Pick<EquipmentItem, 'code'>>; coins: number }>('/api/gacha/pull', user, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ count }),
+      });
       const master = new Map(equipmentItems.map((item) => [item.code, item]));
       setLastPull(response.items.map((item) => master.get(item.code)).filter((item): item is EquipmentItem => Boolean(item)));
       setCoins(response.coins);
+      localStorage.removeItem(storageKey);
+      setRetryCount(null);
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? apiErrorMessage(cause.message) : 'ガチャを利用できません。');
+      const code = cause instanceof Error ? cause.message : 'gacha-unavailable';
+      if (!(cause instanceof TypeError || cause instanceof DOMException) && code !== 'api-unavailable' && code !== 'gacha-unavailable') {
+        localStorage.removeItem(storageKey);
+        setRetryCount(null);
+      }
+      setError(apiErrorMessage(code));
     } finally { setBusy(false); }
   };
 
@@ -128,8 +178,8 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
         <section className="gacha-panel">
           <div className="gacha-copy"><span className="section-kicker">EQUIPMENT RELIC</span><h2>装備召喚</h2><p>武器や防具を集めて、勇者を自分好みにカスタマイズしよう。</p></div>
           <div className="gacha-wallet"><Coins size={16}/><span>所持コイン</span><b>{user ? coins.toLocaleString('ja-JP') : '—'}</b></div>
-          <div className="gacha-actions"><button className="primary-button" onClick={() => void pull(1)} disabled={busy || !user}><Sparkles size={16}/> 1回召喚 <small>100 COIN</small></button><button className="secondary-button" onClick={() => void pull(10)} disabled={busy || !user}><Sparkles size={16}/> 10回召喚 <small>900 COIN</small></button></div>
-          <div className="gacha-odds">排出率 {rarityOrder.map((rarity) => <span key={rarity} style={{ color: rarityInfo[rarity].color }}>{rarityInfo[rarity].label} {({ normal: '70%', rare: '20%', super_rare: '8%', hyper_rare: '1.8%', ultimate_rare: '0.2%' })[rarity]}</span>)}</div>
+          <div className="gacha-actions"><button className="primary-button" onClick={() => void pull(1)} disabled={busy || !user || (retryCount !== null && retryCount !== 1)}><Sparkles size={16}/> {retryCount === 1 ? '1回再試行' : '1回召喚'} <small>300 COIN</small></button><button className="secondary-button" onClick={() => void pull(10)} disabled={busy || !user || (retryCount !== null && retryCount !== 10)}><Sparkles size={16}/> {retryCount === 10 ? '10回再試行' : '10回召喚'} <small>3,000 COIN</small></button></div>
+          <div className="gacha-odds">排出率 {rarityOrder.map((rarity) => <span key={rarity} style={{ color: rarityInfo[rarity].color }}>{rarityInfo[rarity].label} {gachaOdds[rarity]}</span>)}</div>
         </section>
         {lastPull.length > 0 && <section className="gacha-results" aria-live="polite"><div className="guild-section-title"><span className="section-kicker">NEW EQUIPMENT</span><h2>召喚結果</h2></div><div className="guild-item-grid">{lastPull.map((item, index) => <article className="guild-item" key={`${item.code}-${index}`} style={{ '--rarity-color': rarityInfo[item.rarity].color } as React.CSSProperties}><EquipmentArtwork item={item} className="guild-item-art" /><small>{rarityInfo[item.rarity].label}</small><b>{item.name}</b><span>{item.type === 'weapon' ? `ATK ${item.attack}` : `DEF ${item.defense}`}</span></article>)}</div></section>}
       </> : tab === 'inventory' ? <section className="guild-section"><div className="guild-section-title"><div><span className="section-kicker">YOUR COLLECTION</span><h2>所持アイテム <small>{owned.length}種類</small></h2></div><div className="gacha-wallet"><Coins size={15}/><b>{coins.toLocaleString('ja-JP')}</b></div></div>{owned.length ? <div className="guild-item-grid">{owned.map((item) => { const isEquipped = equipped[item.type as 'armor' | 'weapon'] === item.code; return <article className={`guild-item ${isEquipped ? 'equipped' : ''}`} key={item.code} style={{ '--rarity-color': rarityInfo[item.rarity].color } as React.CSSProperties}><EquipmentArtwork item={item} className="guild-item-art" /><small>{rarityInfo[item.rarity].label} · ×{item.quantity}</small><b>{item.name}</b><span>{item.type === 'weapon' ? `ATK ${item.attack}` : `DEF ${item.defense}`}</span><button onClick={() => void equip(item)} disabled={busy || isEquipped}>{isEquipped ? '装備中' : '装備する'}</button></article>; })}</div> : <div className="guild-empty"><PackageOpen size={22}/><b>所持品はまだありません</b><span>Googleログイン後の初期装備とガチャで増やせます。</span></div>}</section>

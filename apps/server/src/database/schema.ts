@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { pgEnum, pgTable, text, integer, boolean, timestamp, uniqueIndex, index, primaryKey } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, integer, boolean, timestamp, uniqueIndex, index, primaryKey, jsonb } from 'drizzle-orm/pg-core';
+import type { GachaResponse } from '../economy/gacha.js';
 
 export const rarityEnum = pgEnum('item_rarity', ['normal', 'rare', 'super_rare', 'hyper_rare', 'ultimate_rare']);
 export const itemTypeEnum = pgEnum('item_type', ['weapon', 'armor', 'accessory']);
@@ -74,6 +75,15 @@ export const gachaPulls = pgTable('gacha_pulls', {
   cost: integer('cost').notNull(),
   pulledAt: timestamp('pulled_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('gacha_pulls_user_pulled_idx').on(table.userId, table.pulledAt)]);
+
+export const gachaRequests = pgTable('gacha_requests', {
+  id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  idempotencyKey: text('idempotency_key').notNull(),
+  count: integer('count').notNull(),
+  response: jsonb('response').$type<GachaResponse>(),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex('gacha_requests_user_key_unique').on(table.userId, table.idempotencyKey)]);
 
 export const coinLedger = pgTable('coin_ledger', {
   id: text('id').primaryKey().$defaultFn(() => randomUUID()),

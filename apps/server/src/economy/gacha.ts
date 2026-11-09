@@ -1,14 +1,28 @@
 import { randomInt } from 'node:crypto';
 import type { ItemRarity } from '@type-arena/game-data';
 
-export const GACHA_COST = { single: 100, tenPull: 900 } as const;
+export const GACHA_COST = { single: 300, tenPull: 3000 } as const;
+
+export type GachaItemResult = {
+  id: string;
+  code: string;
+  name: string;
+  rarity: ItemRarity;
+  type: string;
+  attack: number;
+  defense: number;
+};
+
+export type GachaResponse =
+  | { ok: true; coins: number; items: GachaItemResult[]; count: 1 | 10; cost: number }
+  | { ok: false; error: 'insufficient-coins'; coins: number };
 
 export const GACHA_ODDS: ReadonlyArray<{ rarity: ItemRarity; weight: number }> = [
-  { rarity: 'normal', weight: 7000 },
-  { rarity: 'rare', weight: 2000 },
-  { rarity: 'super_rare', weight: 800 },
-  { rarity: 'hyper_rare', weight: 180 },
-  { rarity: 'ultimate_rare', weight: 20 },
+  { rarity: 'normal', weight: 5500 },
+  { rarity: 'rare', weight: 2800 },
+  { rarity: 'super_rare', weight: 1200 },
+  { rarity: 'hyper_rare', weight: 400 },
+  { rarity: 'ultimate_rare', weight: 100 },
 ];
 
 const totalWeight = GACHA_ODDS.reduce((total, entry) => total + entry.weight, 0);

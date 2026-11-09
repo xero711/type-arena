@@ -4,12 +4,13 @@ import { and, asc, desc, eq, gte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { equipmentItems } from '@type-arena/game-data';
 import { authenticateBearer } from '../auth/bearer.js';
-import { gachaCost, rollRarity } from '../economy/gacha.js';
+import { GACHA_COST, gachaCost, rollRarity, type GachaItemResult, type GachaResponse } from '../economy/gacha.js';
 import { db } from '../database/client.js';
-import { coinLedger, equipment, gachaPulls, inventory, items, matches, users } from '../database/schema.js';
+import { coinLedger, equipment, gachaPulls, gachaRequests, inventory, items, matches, users } from '../database/schema.js';
 
 const listQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).strict();
 const pullBodySchema = z.object({ count: z.union([z.literal(1), z.literal(10)]).default(1) }).strict();
+const idempotencyKeySchema = z.string().uuid();
 const equipBodySchema = z.object({ itemCode: z.string().min(1).max(100) }).strict();
 
 type Database = NonNullable<typeof db>;
@@ -88,40 +89,63 @@ const gameRoutes: FastifyPluginAsync = async (app) => {
     if (!context.ok) return reply.code(context.status).send({ error: context.error });
     const parsed = pullBodySchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid-pull-count' });
+    const parsedKey = idempotencyKeySchema.safeParse(request.headers['idempotency-key']);
+    if (!parsedKey.success) return reply.code(400).send({ error: 'invalid-idempotency-key' });
     const count = parsed.data.count;
     const totalCost = gachaCost(count)!;
+    const idempotencyKey = parsedKey.data;
 
     try {
       const result = await database.transaction(async (tx) => {
+        const [claim] = await tx.insert(gachaRequests).values({
+          userId: context.user.id,
+          idempotencyKey,
+          count,
+        }).onConflictDoNothing({ target: [gachaRequests.userId, gachaRequests.idempotencyKey] })
+          .returning({ id: gachaRequests.id });
+
+        if (!claim) {
+          const [existing] = await tx.select({ count: gachaRequests.count, response: gachaRequests.response })
+            .from(gachaRequests)
+            .where(and(eq(gachaRequests.userId, context.user.id), eq(gachaRequests.idempotencyKey, idempotencyKey)))
+            .limit(1);
+          if (!existing || !existing.response) throw new Error('gacha-idempotency-record-unavailable');
+          if (existing.count !== count) return { statusCode: 409, body: { error: 'idempotency-key-reused' } };
+          return { statusCode: existing.response.ok ? 200 : 409, body: existing.response };
+        }
+
         const [wallet] = await tx.update(users)
           .set({ coins: sql`${users.coins} - ${totalCost}`, updatedAt: new Date() })
           .where(and(eq(users.id, context.user.id), gte(users.coins, totalCost)))
           .returning({ coins: users.coins });
         if (!wallet) {
           const [current] = await tx.select({ coins: users.coins }).from(users).where(eq(users.id, context.user.id)).limit(1);
-          return { ok: false as const, error: 'insufficient-coins', coins: current?.coins ?? 0 };
+          const response: GachaResponse = { ok: false, error: 'insufficient-coins', coins: current?.coins ?? 0 };
+          await tx.update(gachaRequests).set({ response }).where(eq(gachaRequests.id, claim.id));
+          return { statusCode: 409, body: response };
         }
 
         const catalog = await tx.select({ id: items.id, code: items.code, name: items.name, rarity: items.rarity, type: items.type, attack: items.attack, defense: items.defense })
           .from(items).where(eq(items.enabled, true)).orderBy(asc(items.code));
-        const pulled = [];
+        const pulled: GachaItemResult[] = [];
         for (let index = 0; index < count; index += 1) {
           const rarity = rollRarity();
           const candidates = catalog.filter((item) => item.rarity === rarity);
           if (candidates.length === 0) throw new Error('gacha-catalog-empty');
           const item = candidates[randomInt(candidates.length)];
           const pullId = randomUUID();
-          const perPullCost = count === 10 ? 90 : 100;
+          const perPullCost = GACHA_COST.single;
           await tx.insert(gachaPulls).values({ id: pullId, userId: context.user.id, itemId: item.id, cost: perPullCost });
           await tx.insert(inventory).values({ userId: context.user.id, itemId: item.id, quantity: 1 })
             .onConflictDoUpdate({ target: [inventory.userId, inventory.itemId], set: { quantity: sql`${inventory.quantity} + 1` } });
           await tx.insert(coinLedger).values({ userId: context.user.id, amount: -perPullCost, reason: 'gacha', referenceId: pullId });
           pulled.push(item);
         }
-        return { ok: true as const, coins: wallet.coins, items: pulled, count, cost: totalCost };
+        const response: GachaResponse = { ok: true, coins: wallet.coins, items: pulled, count, cost: totalCost };
+        await tx.update(gachaRequests).set({ response }).where(eq(gachaRequests.id, claim.id));
+        return { statusCode: 200, body: response };
       });
-      if (!result.ok) return reply.code(409).send({ error: result.error, coins: result.coins });
-      return result;
+      return reply.code(result.statusCode).send(result.body);
     } catch {
       request.log.error({ event: 'gacha-pull-failed' }, 'Could not complete a gacha pull');
       return reply.code(503).send({ error: 'gacha-unavailable' });
