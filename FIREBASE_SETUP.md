@@ -1,13 +1,10 @@
 # FirebaseとGoogleログインの設定
 
-Firebase Authenticationの通常のGoogle認証は無料のSparkプランで使える機能として案内されています。Identity Platformへのアップグレードは料金・利用上限が異なるため行わず、電話番号認証も使いません。[Firebaseの料金案内](https://firebase.google.com/docs/projects/billing/firebase-pricing-plans)を設定時に確認してください。Googleログインを有効にするFirebaseプロジェクトはユーザー自身が作成してください。Firebaseコンソールでの設定と秘密鍵の取得は外部アカウント操作を伴うため、このワークスペースからは実行していません。
+Firebase AuthenticationのGoogleログインを使います。プロジェクトは **`type-arena-e9428`**（Type Arena）で、無料のSparkプランです。Googleプロバイダー、`localhost` と `xero-x.me` の承認済みドメイン、Webアプリ `Type Arena Web` は設定済みです。Identity Platformへのアップグレードや電話番号認証は行いません。[Firebaseの料金案内](https://firebase.google.com/docs/projects/billing/firebase-pricing-plans)を参照してください。
 
 ## 1. Firebaseプロジェクトを用意
 
-1. [Firebase Console](https://console.firebase.google.com/)でプロジェクトを作成します。
-2. Authenticationの「Sign-in method」でGoogleプロバイダーを有効にします。
-3. Authenticationの「Settings」にある承認済みドメインへ、開発時の`localhost`とGitHub Pagesのホスト名を追加します。
-4. プロジェクト設定からWebアプリを登録し、表示された`apiKey`, `authDomain`, `projectId`, `appId`を控えます。Web APIキーはブラウザー用の公開設定であり、Admin秘密鍵とは別です。
+設定を再現する場合は、Firebase Consoleで既存の`type-arena-e9428`プロジェクトを開いてください。Authenticationの「Sign-in method」でGoogleを有効にし、「Settings」の承認済みドメインに`localhost`と`xero-x.me`を登録します。Webアプリ設定はプロジェクト設定から確認できます。Web APIキーはブラウザー用の公開設定であり、Admin秘密鍵とは別です。
 
 ## 2. ブラウザー用の設定
 
@@ -16,7 +13,7 @@ Copy-Item apps/web/.env.example apps/web/.env.local
 notepad apps/web/.env.local
 ```
 
-値をFirebaseのWebアプリ設定から転記します。
+`apps/web/.env.local` とGitHub Actions用のリポジトリ変数には、Webアプリ設定を登録済みです。新しい環境に設定する場合はFirebaseのWebアプリ設定から値を転記してください。
 
 ```dotenv
 VITE_FIREBASE_API_KEY=...
@@ -30,7 +27,7 @@ VITE_API_URL=http://localhost:3001
 
 ## 3. サーバー用サービスアカウント
 
-Firebase ConsoleのProject settings → Service accountsでAdmin SDK用サービスアカウントを作成し、秘密鍵JSONをダウンロードします。JSONファイルはこのリポジトリへ入れず、暗号化した保管場所に保管してください。
+Firebase ConsoleのProject settings → Service accountsにあるAdmin SDKサービスアカウントを使い、秘密鍵JSONを発行します。JSONファイルはこのリポジトリやGitHubへ入れず、このPCのサーバー設定だけに保管してください。
 
 ```powershell
 Copy-Item apps/server/.env.example apps/server/.env
@@ -58,6 +55,6 @@ pnpm dev
 
 Web画面の「Googleログイン」を押し、Googleアカウントで認証します。サーバー側では`POST /api/auth/session`がIDトークンを検証してプロフィールを作成または更新します。プロフィールAPIは`GET /api/me`、表示名変更は`PATCH /api/me`です。認証情報がない場合はCPU戦をゲストとして遊べます。
 
-## 現在の制限
+## 現在の状態
 
-FirebaseクライアントとAdmin SDKのコードは実装済みですが、実際のGoogle認証確認にはFirebaseプロジェクト設定と秘密鍵が必要です。Googleログイン自体はFirebaseへ接続します。API同期にはPostgreSQLも必要です。サービスアカウント鍵をGitへコミットしないでください。
+Googleログインはローカル画面と公開ビルドで確認済みです。サーバー側のIDトークン検証にはAdmin SDK用の秘密鍵が必要です。2026-11-09に鍵を1本発行しましたが、ダウンロードファイルをこのPC上で確認できず、サーバーへ設定していません。Firebase Console上の未使用鍵を取り消してから、PCへダウンロードできる方法で再発行する作業が残っています。鍵をGitへコミットしないでください。
