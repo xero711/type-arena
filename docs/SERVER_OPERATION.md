@@ -8,6 +8,8 @@
 
 PostgreSQLは`127.0.0.1:5432`だけで待ち受けます。インターネットへ公開するのは、認証済みAPIが稼働する場合でもAPIのHTTPS入口だけです。データフォルダーはリポジトリ外に置き、DBパスワードは`apps/server/.env`（Git除外）へ保存します。
 
+実行環境は公式Node.js 22.23.4を`%LOCALAPPDATA%\TypeArena\NodeJS\22.23.4`へ展開しています。PostgreSQLとNode.jsはいずれも管理者権限を使わず、ユーザー単位で配置しています。
+
 ## 起動
 
 ```powershell
