@@ -1,14 +1,14 @@
 # このPCでTYPE ARENAサーバーを動かす
 
-この環境ではPostgreSQL 18.6をWindowsユーザー領域に配置し、データを次へ保存しています。
+この環境ではPostgreSQL 18.6とNode.js 22.23.4の実行ファイルを、Git除外されるローカル領域へ置いています。PostgreSQLデータは次へ保存しています。
 
 ```text
-%LOCALAPPDATA%\TypeArena\PostgreSQL\data
+apps\server\data\runtime\postgres-data
 ```
 
 PostgreSQLは`127.0.0.1:5432`だけで待ち受けます。インターネットへ公開するのは、認証済みAPIが稼働する場合でもAPIのHTTPS入口だけです。データフォルダーはリポジトリ外に置き、DBパスワードは`apps/server/.env`（Git除外）へ保存します。
 
-実行環境は公式Node.js 22.23.4を`%LOCALAPPDATA%\TypeArena\NodeJS\22.23.4`へ展開しています。PostgreSQLとNode.jsはいずれも管理者権限を使わず、ユーザー単位で配置しています。
+PostgreSQLのバイナリは`apps/server/data/runtime/pgsql`、Node.jsは`apps/server/data/runtime/node/node.exe`にあります。このフォルダー全体は`.gitignore`で除外しています。PostgreSQLは公式WindowsバイナリZIP、Node.jsは公式22.23.4 ZIPをチェックサム検証後に展開しました。システムインストーラーや管理者権限は使っていません。
 
 ## 起動
 
@@ -30,8 +30,8 @@ Invoke-RestMethod http://127.0.0.1:3001/ready
 ## DBの状態確認・停止
 
 ```powershell
-$pgCtl = Join-Path $env:LOCALAPPDATA "TypeArena\PostgreSQL\18.6\pgsql\bin\pg_ctl.exe"
-$pgData = Join-Path $env:LOCALAPPDATA "TypeArena\PostgreSQL\data"
+$pgCtl = Join-Path (Get-Location) "apps\server\data\runtime\pgsql\bin\pg_ctl.exe"
+$pgData = Join-Path (Get-Location) "apps\server\data\runtime\postgres-data"
 & $pgCtl -D $pgData status
 & $pgCtl -D $pgData -m fast stop
 ```

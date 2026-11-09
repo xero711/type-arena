@@ -1,12 +1,21 @@
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$postgresRoot = Join-Path $env:LOCALAPPDATA 'TypeArena\PostgreSQL\18.6\pgsql'
-$postgresData = Join-Path $env:LOCALAPPDATA 'TypeArena\PostgreSQL\data'
-$postgresLog = Join-Path $env:LOCALAPPDATA 'TypeArena\PostgreSQL\postgresql.log'
-$nodeBinary = Join-Path $env:LOCALAPPDATA 'TypeArena\NodeJS\22.23.4\node-v22.23.4-win-x64\node.exe'
-$serverLog = Join-Path $repositoryRoot 'apps\server\data\api.log'
+$serverData = Join-Path $repositoryRoot 'apps\server\data'
+$startupLog = Join-Path $serverData 'startup.log'
+$runtimeRoot = Join-Path $serverData 'runtime'
+$postgresRoot = Join-Path $runtimeRoot 'pgsql'
+$postgresData = Join-Path $runtimeRoot 'postgres-data'
+$postgresLog = Join-Path $serverData 'postgresql.log'
+$nodeBinary = Join-Path $runtimeRoot 'node\node.exe'
+$serverLog = Join-Path $serverData 'api.log'
 $pgCtl = Join-Path $postgresRoot 'bin\pg_ctl.exe'
+
+New-Item -ItemType Directory -Force -Path $serverData | Out-Null
+trap {
+  $_ | Out-String | Add-Content -LiteralPath $startupLog
+  throw
+}
 
 if (-not (Test-Path -LiteralPath $pgCtl)) { throw "PostgreSQL binary not found: $pgCtl" }
 if (-not (Test-Path -LiteralPath $postgresData)) { throw "PostgreSQL data folder not found: $postgresData" }
