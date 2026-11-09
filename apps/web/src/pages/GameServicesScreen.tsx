@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as React from 'react';
 import type { User } from 'firebase/auth';
 import { ArrowLeft, Award, Coins, LoaderCircle, PackageOpen, RefreshCw, Sparkles, Swords, Trophy } from 'lucide-react';
@@ -8,6 +8,7 @@ import EquipmentArtwork from '../components/EquipmentArtwork';
 
 type Tab = 'gacha' | 'inventory' | 'ranking' | 'history';
 type OwnedItem = EquipmentItem & { quantity: number; acquiredAt: string };
+type GachaRevealItem = EquipmentItem & { isNew: boolean };
 type PlayerRank = { rank: number; id: string; displayName: string; photoUrl: string | null; rating: number };
 type MatchRecord = { matchId: string; mode: string; result: 'win' | 'lose' | 'draw' | 'disconnect'; opponentId: string; wpm: number; accuracy: number; maxCombo: number; ratingChange: number; coins: number; completedAt: string };
 
@@ -75,11 +76,14 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
   const [equipped, setEquipped] = useState<{ armor: string | null; weapon: string | null }>({ armor: null, weapon: null });
   const [ranking, setRanking] = useState<PlayerRank[]>([]);
   const [history, setHistory] = useState<MatchRecord[]>([]);
-  const [lastPull, setLastPull] = useState<EquipmentItem[]>([]);
+  const [lastPull, setLastPull] = useState<GachaRevealItem[]>([]);
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [revealAnimating, setRevealAnimating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [retryCount, setRetryCount] = useState<1 | 10 | null>(null);
   const [error, setError] = useState('');
+  const revealTimerRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     if (!apiReady) return;
@@ -114,6 +118,17 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
     setRetryCount(user ? readPendingGacha(user.uid)?.count ?? null : null);
   }, [user]);
 
+  useEffect(() => () => {
+    if (revealTimerRef.current !== null) window.clearTimeout(revealTimerRef.current);
+  }, []);
+
+  const revealNow = () => {
+    if (revealTimerRef.current !== null) window.clearTimeout(revealTimerRef.current);
+    revealTimerRef.current = null;
+    setRevealAnimating(false);
+    setRevealOpen(true);
+  };
+
   const pull = async (count: 1 | 10) => {
     if (!user) { setError('Googleログインするとガチャを利用できます。'); return; }
     const storageKey = pendingGachaStorageKey(user.uid);
@@ -125,7 +140,9 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
     const idempotencyKey = pending?.key ?? crypto.randomUUID();
     localStorage.setItem(storageKey, JSON.stringify({ count, key: idempotencyKey } satisfies PendingGacha));
     setRetryCount(count);
-    setBusy(true); setError(''); setLastPull([]);
+    if (revealTimerRef.current !== null) window.clearTimeout(revealTimerRef.current);
+    revealTimerRef.current = null;
+    setRevealOpen(false); setRevealAnimating(false); setBusy(true); setError(''); setLastPull([]);
     try {
       const response = await apiRequest<{ items: Array<Pick<EquipmentItem, 'code'>>; coins: number }>('/api/gacha/pull', user, {
         method: 'POST',
@@ -133,7 +150,20 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
         body: JSON.stringify({ count }),
       });
       const master = new Map(equipmentItems.map((item) => [item.code, item]));
-      setLastPull(response.items.map((item) => master.get(item.code)).filter((item): item is EquipmentItem => Boolean(item)));
+      const seenCodes = new Set(owned.filter((item) => item.quantity > 0).map((item) => item.code));
+      const revealItems = response.items.map((item) => master.get(item.code)).filter((item): item is EquipmentItem => Boolean(item)).map((item) => {
+        const isNew = !seenCodes.has(item.code);
+        seenCodes.add(item.code);
+        return { ...item, isNew };
+      });
+      setLastPull(revealItems);
+      setRevealOpen(false);
+      setRevealAnimating(true);
+      revealTimerRef.current = window.setTimeout(() => {
+        revealTimerRef.current = null;
+        setRevealAnimating(false);
+        setRevealOpen(true);
+      }, 1100);
       setCoins(response.coins);
       localStorage.removeItem(storageKey);
       setRetryCount(null);
@@ -181,7 +211,17 @@ export default function GameServicesScreen({ user, apiReady, onBack, onLoadout }
           <div className="gacha-actions"><button className="primary-button" onClick={() => void pull(1)} disabled={busy || !user || (retryCount !== null && retryCount !== 1)}><Sparkles size={16}/> {retryCount === 1 ? '1回再試行' : '1回召喚'} <small>300 COIN</small></button><button className="secondary-button" onClick={() => void pull(10)} disabled={busy || !user || (retryCount !== null && retryCount !== 10)}><Sparkles size={16}/> {retryCount === 10 ? '10回再試行' : '10回召喚'} <small>3,000 COIN</small></button></div>
           <div className="gacha-odds">排出率 {rarityOrder.map((rarity) => <span key={rarity} style={{ color: rarityInfo[rarity].color }}>{rarityInfo[rarity].label} {gachaOdds[rarity]}</span>)}</div>
         </section>
-        {lastPull.length > 0 && <section className="gacha-results" aria-live="polite"><div className="guild-section-title"><span className="section-kicker">NEW EQUIPMENT</span><h2>召喚結果</h2></div><div className="guild-item-grid">{lastPull.map((item, index) => <article className="guild-item" key={`${item.code}-${index}`} style={{ '--rarity-color': rarityInfo[item.rarity].color } as React.CSSProperties}><EquipmentArtwork item={item} className="guild-item-art" /><small>{rarityInfo[item.rarity].label}</small><b>{item.name}</b><span>{item.type === 'weapon' ? `ATK ${item.attack}` : `DEF ${item.defense}`}</span></article>)}</div></section>}
+        {lastPull.length > 0 && <section className={`gacha-results ${revealOpen ? 'revealed' : 'sealed'} gacha-rarity-${lastPull.reduce((highest, item) => rarityOrder.indexOf(item.rarity) > rarityOrder.indexOf(highest) ? item.rarity : highest, 'normal' as ItemRarity)}`} aria-live="polite">
+          <div className="guild-section-title"><span className="section-kicker">EQUIPMENT RELIC</span><h2>{revealOpen ? '召喚結果' : '召喚完了'}</h2></div>
+          {!revealOpen ? <div className={`gacha-capsule ${revealAnimating ? 'shaking' : ''}`} role="status">
+            <div className="gacha-capsule-shell" aria-hidden="true"><i /></div>
+            <b>{lastPull.length}点の装備が現れた</b>
+            <div className="gacha-capsule-actions"><button className="primary-button" onClick={revealNow}>開封する</button><button className="secondary-button" onClick={revealNow}>スキップ</button></div>
+          </div> : <div className="guild-item-grid">{lastPull.map((item, index) => <article className={`guild-item gacha-reveal-item gacha-result-${item.rarity}`} key={`${item.code}-${index}`} style={{ '--rarity-color': rarityInfo[item.rarity].color, animationDelay: `${index * 90}ms` } as React.CSSProperties}>
+            <EquipmentArtwork item={item} className="guild-item-art" />{item.isNew && <span className="gacha-new-label">NEW</span>}
+            <small>{rarityInfo[item.rarity].label}</small><b>{item.name}</b><span>{item.type === 'weapon' ? `ATK ${item.attack}` : `DEF ${item.defense}`}</span>
+          </article>)}</div>}
+        </section>}
       </> : tab === 'inventory' ? <section className="guild-section"><div className="guild-section-title"><div><span className="section-kicker">YOUR COLLECTION</span><h2>所持アイテム <small>{owned.length}種類</small></h2></div><div className="gacha-wallet"><Coins size={15}/><b>{coins.toLocaleString('ja-JP')}</b></div></div>{owned.length ? <div className="guild-item-grid">{owned.map((item) => { const isEquipped = equipped[item.type as 'armor' | 'weapon'] === item.code; return <article className={`guild-item ${isEquipped ? 'equipped' : ''}`} key={item.code} style={{ '--rarity-color': rarityInfo[item.rarity].color } as React.CSSProperties}><EquipmentArtwork item={item} className="guild-item-art" /><small>{rarityInfo[item.rarity].label} · ×{item.quantity}</small><b>{item.name}</b><span>{item.type === 'weapon' ? `ATK ${item.attack}` : `DEF ${item.defense}`}</span><button onClick={() => void equip(item)} disabled={busy || isEquipped}>{isEquipped ? '装備中' : '装備する'}</button></article>; })}</div> : <div className="guild-empty"><PackageOpen size={22}/><b>所持品はまだありません</b><span>Googleログイン後の初期装備とガチャで増やせます。</span></div>}</section>
       : tab === 'ranking' ? <section className="guild-section"><div className="guild-section-title"><div><span className="section-kicker">SEASON RANKING</span><h2>レーティングランキング</h2></div></div>{ranking.length ? <div className="guild-ranking">{ranking.map((player) => <div className="guild-ranking-row" key={player.id}><span className={`guild-rank-number ${player.rank <= 3 ? 'top' : ''}`}>{String(player.rank).padStart(2,'0')}</span><span className="guild-rank-avatar">{player.displayName.slice(0,1)}</span><b>{player.displayName}</b><small>RATING</small><strong>{player.rating}</strong></div>)}</div> : <div className="guild-empty"><Trophy size={22}/><b>ランキングはまだありません</b><span>オンライン対戦を始めるとここに掲載されます。</span></div>}</section>
       : <section className="guild-section"><div className="guild-section-title"><div><span className="section-kicker">ONLINE BATTLE HISTORY</span><h2>オンライン戦績</h2></div></div>{history.length ? <div className="guild-history">{history.map((match) => <div className="guild-history-row" key={match.matchId}><span className={`guild-result ${match.result}`}>{match.result === 'win' ? 'WIN' : match.result === 'lose' ? 'LOSE' : match.result === 'draw' ? 'DRAW' : 'DISCONNECT'}</span><span>{match.mode === 'private' ? 'プライベート' : 'ランク'}</span><b>{match.wpm} WPM</b><b>{match.accuracy}%</b><span>{new Date(match.completedAt).toLocaleString('ja-JP')}</span></div>)}</div> : <div className="guild-empty"><Swords size={22}/><b>オンライン対戦の記録はありません</b><span>対戦結果はサーバーに保存されます。</span></div>}</section>}

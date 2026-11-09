@@ -23,9 +23,9 @@ export type EquipmentItem = {
 export const rarityInfo: Record<ItemRarity, { label: string; color: string; primary: string; secondary: string; accent: string }> = {
   normal: { label: 'ノーマル', color: '#c9d2df', primary: '#69867a', secondary: '#334f50', accent: '#d5c79b' },
   rare: { label: 'レア', color: '#70c9ff', primary: '#286d9a', secondary: '#193e71', accent: '#8ee5f3' },
-  super_rare: { label: 'スーパーレア', color: '#c2a0ff', primary: '#624aa8', secondary: '#302d70', accent: '#f0ce72' },
-  hyper_rare: { label: 'ハイパーレア', color: '#ff91ba', primary: '#a63d66', secondary: '#522747', accent: '#ffd07c' },
-  ultimate_rare: { label: 'アルティメットレア', color: '#ffe579', primary: '#b47a31', secondary: '#604026', accent: '#fff0a4' },
+  super_rare: { label: 'スーパーレア', color: '#f0c96d', primary: '#a97829', secondary: '#553914', accent: '#fff1ae' },
+  hyper_rare: { label: 'ハイパーレア', color: '#ff5a67', primary: '#a63d4d', secondary: '#52232e', accent: '#ffc1ad' },
+  ultimate_rare: { label: 'アルティメットレア', color: '#fff4d6', primary: '#e6e4df', secondary: '#81899b', accent: '#ffffff' },
 };
 
 const armorFamilies: { code: string; style: ArmorStyle; names: [string, string, string, string, string]; descriptions: string[] }[] = [

@@ -3,3 +3,30 @@
 .guild-item{position:relative}
 .guild-item.equipped{border-color:color-mix(in srgb,var(--rarity-color) 72%,#455b55);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rarity-color) 25%,transparent),0 0 12px color-mix(in srgb,var(--rarity-color) 14%,transparent)}
 .guild-item button{align-self:center}
+.gacha-results{--gacha-glow:#c9d2df;position:relative;overflow:hidden;box-shadow:0 0 18px color-mix(in srgb,var(--gacha-glow) 17%,transparent);transition:box-shadow .35s ease,border-color .35s ease}
+.gacha-rarity-normal{--gacha-glow:#c9d2df}
+.gacha-rarity-rare{--gacha-glow:#70c9ff}
+.gacha-rarity-super_rare{--gacha-glow:#f0c96d}
+.gacha-rarity-hyper_rare{--gacha-glow:#ff5a67}
+.gacha-rarity-ultimate_rare{--gacha-glow:#fff}
+.gacha-results.gacha-rarity-ultimate_rare{background:radial-gradient(ellipse at 50% 0%,#ffffff30,transparent 55%),linear-gradient(135deg,#252736,#11151f);border-color:#fff9}
+.gacha-results.gacha-rarity-ultimate_rare::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 0%,#fff5 0,transparent 58%);animation:gacha-halo 2.2s ease-in-out infinite alternate}
+.gacha-results>.guild-section-title,.gacha-results>.guild-item-grid,.gacha-results>.gacha-capsule{position:relative;z-index:1}
+.gacha-capsule{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:20px;color:#eff2f7;text-align:center}
+.gacha-capsule-shell{position:relative;width:74px;height:96px;border:3px solid #fff4d2;border-radius:999px;background:linear-gradient(90deg,#cfc8b8 0 46%,#b6404b 46% 54%,#fff0c6 54% 100%);box-shadow:0 0 22px color-mix(in srgb,var(--gacha-glow) 72%,transparent),inset 0 0 9px #fff9;transform:rotate(-8deg)}
+.gacha-capsule-shell::before{content:"";position:absolute;left:-3px;right:-3px;top:43%;height:12px;border-top:2px solid #fff2ce;border-bottom:2px solid #8b3942;background:#d94e55}
+.gacha-capsule-shell i{position:absolute;left:50%;top:50%;width:17px;height:17px;border:3px solid #fff5d9;border-radius:50%;background:var(--gacha-glow);box-shadow:0 0 11px var(--gacha-glow);transform:translate(-50%,-50%)}
+.gacha-capsule.shaking .gacha-capsule-shell{animation:gacha-shake .12s linear infinite,gacha-capsule-glow 1.1s ease-out both}
+.gacha-capsule>b{font-size:12px;color:#f3d893}
+.gacha-capsule-actions{display:flex;gap:8px}
+.gacha-capsule-actions button{min-height:34px}
+.gacha-reveal-item{animation:gacha-reveal-card .42s cubic-bezier(.18,.78,.22,1.1) both}
+.gacha-reveal-item.gacha-result-ultimate_rare{border-color:#fff;box-shadow:inset 0 0 0 1px #fff9,0 0 21px #fff7}
+.gacha-reveal-item.gacha-result-hyper_rare{box-shadow:inset 0 0 0 1px #ff5a6744,0 0 16px #ff5a6733}
+.gacha-reveal-item.gacha-result-super_rare{box-shadow:inset 0 0 0 1px #f0c96d44,0 0 14px #f0c96d2e}
+.gacha-new-label{align-self:flex-start;padding:3px 6px;border-radius:2px;background:linear-gradient(100deg,#f4d77d,#fff4c8);color:#402d15;font:900 8px "DM Mono",monospace;letter-spacing:.12em;box-shadow:0 0 9px #f4d77d88}
+@keyframes gacha-shake{0%,100%{transform:rotate(-8deg) translateX(0)}25%{transform:rotate(-4deg) translateX(-4px)}75%{transform:rotate(-12deg) translateX(4px)}}
+@keyframes gacha-capsule-glow{0%{filter:brightness(1)}70%{filter:brightness(1.7)}100%{filter:brightness(2.2) scale(1.08)}}
+@keyframes gacha-reveal-card{from{opacity:0;transform:translateY(14px) scale(.86)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes gacha-halo{from{opacity:.38}to{opacity:.85}}
+@media(prefers-reduced-motion:reduce){.gacha-capsule.shaking .gacha-capsule-shell,.gacha-reveal-item,.gacha-results.gacha-rarity-ultimate_rare::before{animation:none}}
