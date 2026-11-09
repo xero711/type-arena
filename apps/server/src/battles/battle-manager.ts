@@ -1,4 +1,4 @@
-import { prompts, type Prompt } from '@type-arena/game-data';
+import { prompts, shuffled, type Prompt } from '@type-arena/game-data';
 import type { QueueEntry } from '../matchmaking/matchmaker.js';
 
 export type BattlePlayer = Pick<QueueEntry, 'firebaseUid' | 'userId' | 'socketId' | 'displayName' | 'rating'>;
@@ -22,7 +22,7 @@ export type BattleSnapshot = {
 };
 
 type PlayerState = { player: BattlePlayer; hp: number; promptIndex: number; promptStartedAt: number; lastKeyAt: number; totalCharacters: number; completedPrompts: number; currentInput: string; correctKeystrokes: number; mistakes: number; currentCombo: number; maxCombo: number };
-type Battle = { matchId: string; players: [PlayerState, PlayerState]; startsAt: number; promptOffset: number; outcome: BattleOutcome | null };
+type Battle = { matchId: string; players: [PlayerState, PlayerState]; startsAt: number; promptOrder: Prompt[]; outcome: BattleOutcome | null };
 
 /** サーバーがプロンプト順、入力検証、HP、攻撃力、勝敗を保持する。 */
 export class BattleManager {
@@ -31,11 +31,12 @@ export class BattleManager {
 
   create(matchId: string, players: [BattlePlayer, BattlePlayer], now = Date.now(), countdownMs = 3000): void {
     if (this.battles.has(matchId) || players[0].firebaseUid === players[1].firebaseUid) throw new Error('invalid-match');
-    const offset = [...matchId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % prompts.length;
+    let seed = [...matchId].reduce((sum, char) => Math.imul(sum ^ char.charCodeAt(0), 16777619), 2166136261) >>> 0;
+    const promptOrder = shuffled(prompts, () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; });
     const state: Battle = {
       matchId,
       startsAt: now + countdownMs,
-      promptOffset: offset,
+      promptOrder,
       outcome: null,
       players: players.map((player) => ({ player, hp: 100, promptIndex: 0, promptStartedAt: now + countdownMs, lastKeyAt: now + countdownMs - 20, totalCharacters: 0, completedPrompts: 0, currentInput: '', correctKeystrokes: 0, mistakes: 0, currentCombo: 0, maxCombo: 0 })) as [PlayerState, PlayerState],
     };
@@ -135,7 +136,7 @@ export class BattleManager {
   clear(matchId: string): void { this.battles.delete(matchId); }
 
   private promptFor(battle: Battle, promptIndex: number): Prompt {
-    return prompts[(battle.promptOffset + promptIndex) % prompts.length];
+    return battle.promptOrder[promptIndex % battle.promptOrder.length];
   }
 
   private accuracy(player: PlayerState): number {

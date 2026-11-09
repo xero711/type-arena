@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Activity, ArrowDownRight, ArrowRight, AudioLines, Bolt, ChevronDown, CircleHelp, Coins, Flame, Gamepad2, Gauge, LockKeyhole, RotateCcw, Settings2, Shield, Sparkles, Swords, Trophy, UserRound, Volume2 } from 'lucide-react';
-import { prompts, type Prompt } from '@type-arena/game-data';
+import { prompts, shuffled, type Prompt } from '@type-arena/game-data';
 import { isAnyVariantComplete, matchingVariants } from '@type-arena/typing-engine';
 import { useAuthStore } from './stores/authStore';
 import OnlineArena from './pages/OnlineArena';
@@ -49,6 +49,7 @@ function readHeroEquipment(): EquipmentLoadout {
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [promptIndex, setPromptIndex] = useState(0);
+  const [promptOrder, setPromptOrder] = useState<Prompt[]>(prompts);
   const [typed, setTyped] = useState('');
   const [hp, setHp] = useState(initialPlayerHp);
   const [mp, setMp] = useState(30);
@@ -65,7 +66,7 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
   const { user, busy: authBusy, message: authMessage, apiStatus, initialize, login, logout } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
-  const prompt: Prompt = prompts[promptIndex % prompts.length];
+  const prompt: Prompt = promptOrder[promptIndex % promptOrder.length];
   const accuracy = keystrokes ? Math.round(correct / keystrokes * 100) : 100;
   const result = enemyHp <= 0 ? 'win' : hp <= 0 ? 'lose' : null;
   const heroAppearance = resolveHeroAppearance(loadout.armorId, loadout.weaponId);
@@ -98,6 +99,7 @@ export default function App() {
   }, [screen, result, wpm, accuracy]);
 
   const startBattle = () => {
+    setPromptOrder(shuffled(prompts));
     setPromptIndex(0); setTyped(''); setHp(initialPlayerHp); setMp(30); setPotions(1); setEnemyHp(initialPlayerHp);
     setWpm(0); setCorrect(0); setKeystrokes(0); setErrors(0); setElapsed(0); setScreen('battle');
     window.setTimeout(() => inputRef.current?.focus(), 50);
