@@ -10,3 +10,6 @@ export const prompts: Prompt[] = [
   { id: 'p7', text: '炎の守護者', reading: 'ほのおのしゅごしゃ', romaji: ['honoonoshugosha', 'honoonosyugosya', 'honoonoshugosya', 'honoonosyugosha'], category: 'バトル' },
   { id: 'p8', text: '月明かりの道', reading: 'つきあかりのみち', romaji: ['tsukiakarinomichi', 'tukiakarinomiti', 'tsukiakarinomiti', 'tukiakarinomichi'], category: '自然' }
 ];
+
+export { armorItems, equipmentItems, findArmor, findWeapon, getRarityLabel, itemRarities, rarityInfo, weaponItems } from './items.js';
+export type { ArmorStyle, EquipmentItem, EquipmentSlot, ItemRarity, WeaponStyle } from './items.js';

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { pgEnum, pgTable, text, integer, boolean, timestamp, uniqueIndex, index, primaryKey } from 'drizzle-orm/pg-core';
 
-export const rarityEnum = pgEnum('item_rarity', ['common', 'rare', 'epic', 'legendary']);
+export const rarityEnum = pgEnum('item_rarity', ['normal', 'rare', 'super_rare', 'hyper_rare', 'ultimate_rare']);
 export const itemTypeEnum = pgEnum('item_type', ['weapon', 'armor', 'accessory']);
 export const matchResultEnum = pgEnum('match_result', ['win', 'lose', 'draw', 'disconnect']);
 

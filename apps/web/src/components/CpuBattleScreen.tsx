@@ -4,7 +4,8 @@ import type { Prompt } from '@type-arena/game-data';
 import { matchingVariants } from '@type-arena/typing-engine';
 import background from '../assets/market-battle-bg.png';
 import enemySprite from '../assets/shadow-slime.png';
-import { heroLoadouts, resolveHeroAppearance } from '../game/hero-appearance';
+import { resolveHeroAppearance } from '../game/hero-appearance';
+import HeroSprite from './HeroSprite';
 
 type Props = {
   prompt: Prompt;
@@ -18,10 +19,11 @@ type Props = {
   wpm: number;
   accuracy: number;
   errors: number;
-  equipmentId: string;
+  armorId: string;
+  weaponId: string;
   inputRef: RefObject<HTMLInputElement | null>;
   onType: (event: ChangeEvent<HTMLInputElement>) => void;
-  onEquipmentChange: (id: string) => void;
+  onOpenEquipment: () => void;
   onBack: () => void;
   onAttack: () => void;
   onMagic: () => void;
@@ -36,10 +38,10 @@ function HpBar({ value, tone }: { value: number; tone: 'hero' | 'enemy' }) {
 export default function CpuBattleScreen(props: Props) {
   const {
     prompt, promptIndex, typed, hp, mp, enemyHp, potions, elapsed, wpm,
-    accuracy, errors, equipmentId, inputRef, onType, onEquipmentChange,
+    accuracy, errors, armorId, weaponId, inputRef, onType, onOpenEquipment,
     onBack, onAttack, onMagic, onPotion, onFlee,
   } = props;
-  const hero = resolveHeroAppearance(equipmentId);
+  const hero = resolveHeroAppearance(armorId, weaponId);
   const matching = matchingVariants(prompt.romaji, typed);
   const target = matching[0] ?? prompt.romaji[0];
   const progress = target ? Math.round((typed.length / target.length) * 100) : 0;
@@ -54,8 +56,8 @@ export default function CpuBattleScreen(props: Props) {
       </header>
 
       <div className="retro-character hero-character">
-        <div className="retro-nameplate hero-nameplate"><b>勇者</b><span>{hero.name}</span></div>
-        <img src={hero.sprite} alt={`勇者。${hero.armor}と${hero.weapon}を装備`} />
+        <div className="retro-nameplate hero-nameplate"><b>勇者</b><span>{hero.armor.name} / {hero.weapon.name}</span></div>
+        <HeroSprite armor={hero.armor} weapon={hero.weapon} />
         <div className="retro-floor-shadow" />
       </div>
       <div className="retro-character enemy-character">
@@ -86,10 +88,10 @@ export default function CpuBattleScreen(props: Props) {
       </div>
       <div className="retro-status">
         <div className="retro-status-block hero-status">
-          <div className="retro-status-heading"><b>勇者</b><label>YOU</label><select value={hero.id} onChange={(event) => onEquipmentChange(event.currentTarget.value)} aria-label="勇者の装備セット">
-            {heroLoadouts.map((loadout) => <option key={loadout.id} value={loadout.id}>{loadout.name}</option>)}
-          </select></div>
-          <div className="retro-equipment-caption">防具：{hero.armor}　武器：{hero.weapon}</div>
+          <div className="retro-status-heading"><b>勇者</b><label>YOU</label><button className="retro-open-equipment" onClick={onOpenEquipment}>そうび</button></div>
+          <div className="retro-equipment-caption" title={`防具：${hero.armor.name} / 武器：${hero.weapon.name}`}>
+            防具 DEF {hero.armor.defense}　武器 ATK {hero.weapon.attack}
+          </div>
           <div className="retro-stat-line"><span>HP</span><HpBar value={hp} tone="hero" /><b>{Math.ceil(hp)}/100</b></div>
           <div className="retro-stat-line mp-line"><span>MP</span><HpBar value={mp / 30 * 100} tone="hero" /><b>{mp}/30</b></div>
         </div>
