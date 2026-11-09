@@ -23,6 +23,7 @@ type Props = {
   heroArmorId: string;
   heroWeaponId: string;
   login: () => Promise<void>;
+  guestLogin: () => Promise<void>;
   onBack: () => void;
 };
 
@@ -32,7 +33,7 @@ function progressColor(value: number) {
   return { width: `${Math.max(0, Math.min(100, value))}%` };
 }
 
-export default function OnlineArena({ user, apiReady, heroArmorId, heroWeaponId, login, onBack }: Props) {
+export default function OnlineArena({ user, apiReady, heroArmorId, heroWeaponId, login, guestLogin, onBack }: Props) {
   const socketRef = useRef<Socket | null>(null);
   const submittedRef = useRef(false);
   const submitAnswerRef = useRef<(answer: string) => void>(() => undefined);
@@ -50,6 +51,8 @@ export default function OnlineArena({ user, apiReady, heroArmorId, heroWeaponId,
   const [seconds, setSeconds] = useState(0);
   const [clock, setClock] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
+  const [privateCode, setPrivateCode] = useState('');
+  const [issuedCode, setIssuedCode] = useState('');
   const heroAppearance = resolveHeroAppearance(heroArmorId, heroWeaponId);
   const battleRef = useRef<BattleView | null>(battle);
   const outcomeRef = useRef<'win' | 'lose' | null>(outcome);
@@ -79,6 +82,8 @@ export default function OnlineArena({ user, apiReady, heroArmorId, heroWeaponId,
         setQueued(true); setQueuePosition(data.position ?? 1); setError(null);
       });
       socket.on('matchmaking:matched', () => { setQueued(false); setQueuePosition(0); setError(null); });
+      socket.on('private:created', (data: { code: string }) => { setIssuedCode(data.code); setError(null); });
+      socket.on('private:error', () => setError('コードが無効か、対戦相手がすでに参加しています。'));
       socket.on('matchmaking:cancelled', () => { setQueued(false); setQueuePosition(0); });
       socket.on('matchmaking:error', (data: { code?: string }) => {
         const messages: Record<string, string> = {
@@ -175,7 +180,7 @@ export default function OnlineArena({ user, apiReady, heroArmorId, heroWeaponId,
 
   return <main className="online-page">
     <div className="online-page-head"><button className="back-link" onClick={leave}><ArrowLeft size={16}/> ホームへ戻る</button><span className="online-mode"><Swords size={14}/> RANKED MATCH</span><span className={`online-connection ${connected ? 'connected' : ''}`}><i/>{connected ? 'SOCKET CONNECTED' : 'CONNECTING'}</span></div>
-    {!user ? <section className="online-gate"><div className="online-gate-icon"><Swords size={25}/></div><span className="section-kicker">ONLINE ARENA</span><h1>対戦にはログインが必要です</h1><p>Googleアカウントでログインすると、レートを使った対戦マッチングに参加できます。</p><button className="primary-button" onClick={() => void login()}>Googleログイン</button><button className="text-link" onClick={onBack}>CPU戦を続ける</button></section>
+    {!user ? <section className="online-gate"><div className="online-gate-icon"><Swords size={25}/></div><span className="section-kicker">ONLINE ARENA</span><h1>オンライン対戦に参加</h1><p>ゲストならすぐ参加できます。戦績を保存する場合はGoogleログインをご利用ください。</p><div className="online-actions"><button className="primary-button" onClick={() => void guestLogin()}>ゲストで参加</button><button className="secondary-button" onClick={() => void login()}>Googleログイン</button></div><button className="text-link" onClick={onBack}>CPU戦を続ける</button></section>
       : !apiReady ? <section className="online-gate"><div className="online-gate-icon"><CircleAlert size={25}/></div><span className="section-kicker">SERVER NOT READY</span><h1>対戦サーバーを準備中</h1><p>API、Firebase、PostgreSQLが利用可能になるまで、CPU戦をプレイできます。</p><button className="secondary-button" onClick={onBack}>CPU戦へ戻る</button></section>
       : outcome ? <section className="online-gate"><div className={`online-gate-icon ${outcome}`}><Trophy size={25}/></div><span className="section-kicker">MATCH COMPLETE</span><h1>{outcome === 'win' ? '勝利！' : '敗北'}</h1><p>{outcome === 'win' ? '対戦相手を倒しました。' : '次の対戦で巻き返しましょう。'}</p>{finalStats && <div className="match-result-stats"><span><b>{finalStats.wpm}</b> WPM</span><span><b>{finalStats.accuracy}%</b> 正確率</span><span><b>{finalStats.maxCombo}</b> 最大コンボ</span><span><b>{finalStats.mistakes}</b> ミス</span></div>}{error && <p role="status">{error}</p>}<div className="online-actions"><button className="primary-button" onClick={() => {setBattle(null);setOutcome(null);setFinalStats(null);setError(null);socketRef.current?.emit('matchmaking:join')}}><Search size={16}/> もう一度マッチング</button><button className="secondary-button" onClick={leave}>ホームへ</button></div></section>
       : battle ? <section className="online-battle">
@@ -184,6 +189,6 @@ export default function OnlineArena({ user, apiReady, heroArmorId, heroWeaponId,
         <div className="online-prompt-panel"><span className="section-kicker">{battle.prompt.category} / PROMPT {String(battle.completedPrompts + 1).padStart(2,'0')}</span><h1>{battle.prompt.text}</h1><p>{battle.prompt.reading}</p><div className="romaji-line">{[...(matchingVariants(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed)[0] ?? prompts.find((item) => item.id === battle.prompt.id)?.romaji[0] ?? '')].map((char, index) => <span key={`${battle.prompt.id}-${index}`} className={index < typed.length ? 'typed-char' : index === typed.length ? 'next-char' : ''}>{char}</span>)}</div>{countdown > 0 && <div className="battle-countdown">BATTLE STARTS IN {countdown}</div>}<input className="typing-input" value={typed} onKeyDown={onType} onChange={() => undefined} disabled={submitted || countdown > 0} autoComplete="off" autoCapitalize="off" spellCheck={false} placeholder={countdown ? '開始までお待ちください' : `「${battle.prompt.reading}」をローマ字で入力`} aria-label="対戦ローマ字入力" autoFocus/><div className="online-input-stats">正確率 <b>{accuracy}%</b><span>ミス {mistakes}</span><span>最大コンボ {maxCombo}</span></div>{submitted && <div className="waiting-hit"><LoaderCircle size={14}/> サーバーで回答を検証中…</div>}{typed.length > 0 && isAnyVariantComplete(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed) && !submitted && <button className="primary-button online-submit" onClick={() => submitAnswer(typed)}>回答を送信</button>}</div>
         {error && <div className="online-error" role="status"><CircleAlert size={14}/>{error}</div>}
         <div className="online-footnote">入力をサーバーで検証し、ダメージと勝敗を計算します。最高速度は300 WPMに制限されます。</div>
-      </section> : <section className="online-gate"><div className="online-gate-icon"><Search size={25}/></div><span className="section-kicker">RANKED MATCH</span><h1>対戦相手を探す</h1><p>{connected ? 'あなたのサーバー保存レートに近いプレイヤーを探します。' : '対戦サーバーへ接続しています。'}</p>{queued ? <><div className="queue-wait"><LoaderCircle size={20}/> マッチング待機中 <span>待機列 {queuePosition}</span></div><button className="secondary-button" onClick={() => socketRef.current?.emit('matchmaking:cancel')}>キャンセル</button></> : <button className="primary-button" disabled={!connected} onClick={() => {setError(null);socketRef.current?.emit('matchmaking:join')}}><Search size={16}/> マッチング開始</button>}{error && <div className="online-error" role="status"><CircleAlert size={14}/>{error}</div>}<div className="match-note">ランク差の許容範囲は待ち時間に応じて広がります。</div></section>}
+      </section> : <section className="online-gate"><div className="online-gate-icon"><Search size={25}/></div><span className="section-kicker">ONLINE MATCH</span><h1>対戦相手を探す</h1><p>{connected ? '通常マッチまたは4桁コードで友達と対戦できます。' : '対戦サーバーへ接続しています。'}</p>{queued ? <><div className="queue-wait"><LoaderCircle size={20}/> マッチング待機中 <span>待機列 {queuePosition}</span></div><button className="secondary-button" onClick={() => socketRef.current?.emit('matchmaking:cancel')}>キャンセル</button></> : <button className="primary-button" disabled={!connected} onClick={() => {setError(null);socketRef.current?.emit('matchmaking:join')}}><Search size={16}/> ランクマッチ開始</button>}<div className="online-actions" style={{marginTop:16}}><button className="secondary-button" disabled={!connected} onClick={() => { setIssuedCode(''); socketRef.current?.emit('private:create'); }}>コードを発行</button><input aria-label="4桁コード" inputMode="numeric" maxLength={4} placeholder="4桁コード" value={privateCode} onChange={(event) => setPrivateCode(event.target.value.replace(/\D/g, '').slice(0,4))}/><button className="secondary-button" disabled={!connected || privateCode.length !== 4} onClick={() => socketRef.current?.emit('private:join', {code:privateCode})}>参加</button></div>{issuedCode && <p>対戦コード: <b>{issuedCode}</b> を相手に共有してください。</p>}{error && <div className="online-error" role="status"><CircleAlert size={14}/>{error}</div>}<div className="match-note">ゲスト対戦の戦績はGoogleログイン時に保存されます。</div></section>}
   </main>;
 }

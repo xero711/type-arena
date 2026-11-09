@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth, firebaseConfigured, signInWithGoogle, signOutUser } from '../auth/firebase';
+import { auth, firebaseConfigured, signInAsGuest, signInWithGoogle, signOutUser } from '../auth/firebase';
 
 type AuthState = {
   user: User | null;
@@ -10,6 +10,7 @@ type AuthState = {
   apiStatus: 'unknown' | 'online' | 'degraded' | 'offline';
   initialize: () => () => void;
   login: () => Promise<void>;
+  guestLogin: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -62,6 +63,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ busy: true, message: null });
     try { await signInWithGoogle(); }
     catch (error) { set({ message: error instanceof Error ? error.message : 'Googleログインに失敗しました。' }); }
+    finally { set({ busy: false }); }
+  },
+  guestLogin: async () => {
+    set({ busy: true, message: null });
+    try { await signInAsGuest(); }
+    catch (error) { set({ message: error instanceof Error ? error.message : 'ゲスト参加に失敗しました。' }); }
     finally { set({ busy: false }); }
   },
   logout: async () => {

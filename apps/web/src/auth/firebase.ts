@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInAnonymously, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
 
 const clientConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -23,6 +23,11 @@ export async function signInWithGoogle(): Promise<void> {
     return;
   }
   await signInWithPopup(auth, provider);
+}
+
+export async function signInAsGuest(): Promise<void> {
+  if (!auth) throw new Error('Firebaseの設定後にゲスト対戦を利用できます。');
+  await signInAnonymously(auth);
 }
 
 export async function signOutUser(): Promise<void> {
