@@ -12,10 +12,10 @@ const host: QueueEntry = {
 };
 
 describe('private match invites', () => {
-  it('creates one six character unambiguous alphanumeric code per host', () => {
+  it('creates one four digit code per host', () => {
     const matchmaker = new PrivateMatchmaker();
     const invite = matchmaker.create(host, 1_000);
-    expect(invite.code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(invite.code).toMatch(/^\d{4}$/);
     expect(invite.expiresAt).toBe(1_000 + PRIVATE_MATCH_TTL_MS);
     expect(matchmaker.get(invite.code.toLowerCase(), 1_001)).toEqual(invite);
     expect(matchmaker.size).toBe(1);

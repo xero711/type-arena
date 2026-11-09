@@ -968,6 +968,21 @@ body {
   border-bottom: 0;
 }
 
+.record-row {
+  grid-template-columns: 64px minmax(120px, 1fr) repeat(3, minmax(78px, 96px));
+}
+
+@media (max-width: 540px) {
+  .records-list {
+    overflow-x: auto;
+  }
+
+  .record-row {
+    min-width: 540px;
+    grid-template-columns: 58px minmax(150px, 1fr) repeat(3, 82px);
+  }
+}
+
 .record-result.win {
   color: #173078;
   background: #f0d16e;

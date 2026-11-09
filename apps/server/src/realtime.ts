@@ -205,7 +205,7 @@ export function attachRealtime(httpServer: HttpServer) {
     });
 
     socket.on('private:join', async (payload: unknown) => {
-      const parsed = z.object({ code: z.string().regex(/^[A-HJ-NP-Z2-9]{6}$/i) }).strict().safeParse(payload);
+      const parsed = z.object({ code: z.string().regex(/^\d{4}$/) }).strict().safeParse(payload);
       if (!parsed.success) return emitPrivateError(socket.id, 'invalid-code');
       if (activeMatches.has(firebaseUid)) return emitPrivateError(socket.id, 'already-in-match');
       if (!db) return emitPrivateError(socket.id, 'database-not-configured');
@@ -303,5 +303,13 @@ export function attachRealtime(httpServer: HttpServer) {
     });
   });
 
-  return io;
+  const shutdownGracefully = async () => {
+    await new Promise<void>((resolve) => io.close(() => resolve()));
+    for (const timer of disconnectTimers.values()) clearTimeout(timer);
+    for (const timer of battleTimers.values()) clearTimeout(timer);
+    disconnectTimers.clear();
+    battleTimers.clear();
+  };
+
+  return Object.assign(io, { shutdownGracefully });
 }

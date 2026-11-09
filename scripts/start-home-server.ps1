@@ -10,6 +10,7 @@ $postgresLog = Join-Path $serverData 'postgresql.log'
 $nodeBinary = Join-Path $runtimeRoot 'node\node.exe'
 $serverLog = Join-Path $serverData 'api.log'
 $pgCtl = Join-Path $postgresRoot 'bin\pg_ctl.exe'
+$pnpmCommand = (Get-Command pnpm.cmd -ErrorAction Stop).Source
 
 New-Item -ItemType Directory -Force -Path $serverData | Out-Null
 trap {
@@ -27,10 +28,41 @@ if ($LASTEXITCODE -ne 0) {
   if ($LASTEXITCODE -ne 0) { throw 'Could not start local PostgreSQL.' }
 }
 
+$apiPort = 3001
+$existingListener = Get-NetTCPConnection -State Listen -LocalPort $apiPort -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($existingListener) {
+  try {
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$apiPort/api/health" -TimeoutSec 3
+    if ($health.status -eq 'ok' -and $health.database -eq 'online') {
+      "API already healthy on port $apiPort; skipping duplicate start." | Add-Content -LiteralPath $startupLog
+      return
+    }
+  } catch { }
+  throw "Port $apiPort is already in use but the TYPE ARENA API did not pass its health check."
+}
+
+Push-Location $repositoryRoot
+try {
+  & $pnpmCommand --filter '@type-arena/server' db:migrate *>> $startupLog
+  if ($LASTEXITCODE -ne 0) { throw 'Could not apply database migrations before starting the API.' }
+} finally {
+  Pop-Location
+}
+
 Push-Location (Join-Path $repositoryRoot 'apps\server')
 try {
   & $nodeBinary '.\dist\index.js' *>> $serverLog
-  if ($LASTEXITCODE -ne 0) { throw "TYPE ARENA API stopped with exit code $LASTEXITCODE" }
+  if ($LASTEXITCODE -ne 0) {
+    $apiExitCode = $LASTEXITCODE
+    try {
+      $health = Invoke-RestMethod -Uri "http://127.0.0.1:$apiPort/api/health" -TimeoutSec 3
+      if ($health.status -eq 'ok' -and $health.database -eq 'online') {
+        "Another API instance passed its health check after this process exited." | Add-Content -LiteralPath $startupLog
+        return
+      }
+    } catch { }
+    throw "TYPE ARENA API stopped with exit code $apiExitCode"
+  }
 } finally {
   Pop-Location
 }

@@ -60,15 +60,16 @@ Invoke-RestMethod http://127.0.0.1:3001/ready
 
 ## バックアップ
 
-サーバーを停止する必要はありません。保存先フォルダーは事前に作成し、バックアップファイルはPC外の安全な媒体にも複製してください。
+このPCでは日次バックアップタスクが`apps/server/data/backups`に保存し、14日より古いバックアップを整理します。手動作成もできます。APIを停止せずに実行できます。
 
 ```powershell
-New-Item -ItemType Directory -Force -Path apps/server/backups
-pg_dump -h 127.0.0.1 -U type_arena -Fc -f "apps/server/backups/type-arena-$(Get-Date -Format yyyyMMdd-HHmmss).dump" type_arena
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-database.ps1
 ```
 
-バックアップから復元する場合は、空のDBへ次を実行します。
+復元する場合は、まずAPIを停止してからバックアップファイルを選びます。スクリプトが実行前に確認し、現在のDBのデータを置き換えます。
 
 ```powershell
-pg_restore -h 127.0.0.1 -U type_arena -d type_arena --clean --if-exists "apps/server/backups/バックアップファイル名.dump"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore-database.ps1 -BackupPath .\apps\server\data\backups\type-arena-YYYYMMDD-HHmmss.dump
 ```
+
+バックアップはこのPC内にあるため、必要に応じて外部ドライブへもコピーしてください。`.dump`ファイルや`.env`をGitHubへ追加しないでください。

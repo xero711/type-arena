@@ -17,7 +17,14 @@ Invoke-RestMethod http://127.0.0.1:3001/ready
 
 ## 公開APIが応答しない
 
-`tailscale funnel status`を実行します。Funnelが未承認の場合は、初回に表示されたTailscaleの承認画面で有効化します。外部からAPIへつながらなくても、CPU対戦と練習は利用できます。
+`tailscale funnel status`で`https://friday-server.tail3b93c8.ts.net`が表示されるか確認します。公開ヘルスチェックは次のコマンドです。
+
+```powershell
+Invoke-RestMethod https://friday-server.tail3b93c8.ts.net/api/health
+Invoke-RestMethod https://friday-server.tail3b93c8.ts.net/ready
+```
+
+`/api/health`が`database: offline`の場合は、PC上のPostgreSQLを確認してください。Funnelを有効にしても、CPU対戦と練習はAPI停止中に遊べます。PostgreSQLの5432番ポートをFunnelやルーターで公開しないでください。
 
 ## 新しい装備が表示されない
 

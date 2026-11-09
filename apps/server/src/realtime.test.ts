@@ -10,7 +10,7 @@ describe('Socket.IO authentication', () => {
   const ioServer = attachRealtime(httpServer);
 
   afterAll(async () => {
-    await new Promise<void>((resolve) => ioServer.close(() => resolve()));
+    await ioServer.shutdownGracefully();
   });
 
   it('rejects sockets that do not provide a Firebase bearer token', async () => {

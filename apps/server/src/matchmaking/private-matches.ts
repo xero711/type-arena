@@ -1,7 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import type { QueueEntry } from './matchmaker.js';
 
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const PRIVATE_MATCH_TTL_MS = 10 * 60 * 1000;
 
 export type PrivateMatchInvite = {
@@ -11,7 +10,7 @@ export type PrivateMatchInvite = {
   expiresAt: number;
 };
 
-/** 一時的な6文字招待コードを管理し、切断・期限切れで古い招待を破棄する。 */
+/** 一時的な4桁招待コードを管理し、切断・期限切れで古い招待を破棄する。 */
 export class PrivateMatchmaker {
   private readonly invites = new Map<string, PrivateMatchInvite>();
   private readonly codeByHost = new Map<string, string>();
@@ -21,9 +20,7 @@ export class PrivateMatchmaker {
     this.removeHost(host.firebaseUid);
 
     let code = '';
-    do {
-      code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
-    } while (this.invites.has(code));
+    do { code = String(randomInt(10_000)).padStart(4, '0'); } while (this.invites.has(code));
 
     const invite = { code, host, createdAt: now, expiresAt: now + PRIVATE_MATCH_TTL_MS };
     this.invites.set(code, invite);

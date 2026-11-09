@@ -45,8 +45,10 @@ pnpm dev
 - GitHub Pages: [https://xero-x.me/type-arena/](https://xero-x.me/type-arena/)
 - API: `127.0.0.1:3001`
 - PostgreSQL: `127.0.0.1:5432`
+- 公開API: `https://friday-server.tail3b93c8.ts.net`（Tailscale Funnel、HTTPS）
 - Googleログイン用のWeb設定: 設定済み
 - Firebase Admin SDK秘密鍵: IDトークン検証だけなら不要。プロジェクトIDは設定済み
-- Tailscale Funnel: tailnetでの有効化待ち
+- 自動起動: `TYPE ARENA Local Server`タスクを登録済み
+- 自動バックアップ: 毎日3時、過去14日分を保持
 
 運用方法は[`docs/SERVER_OPERATION.md`](docs/SERVER_OPERATION.md)を参照してください。

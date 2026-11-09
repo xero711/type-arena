@@ -8,8 +8,8 @@ Socket.IOはAPIと同じHTTPサーバーへWebSocket/pollingで接続します�
 |---|---|---|
 | Client → Server | `matchmaking:join` | 認証ユーザーのDBプロフィールを取得して待機列へ追加 |
 | Client → Server | `matchmaking:cancel` | 待機中の自分を取り消す |
-| Client → Server | `private:create` | 6文字の招待コードを作成。10分後または発行者の切断で失効 |
-| Client → Server | `private:join` | 6文字コードでプライベート戦へ参加 |
+| Client → Server | `private:create` | 4桁数字の招待コードを作成。10分後または発行者の切断で失効 |
+| Client → Server | `private:join` | 4桁数字コードでプライベート戦へ参加 |
 | Server → Client | `private:created` | 招待コードと有効期限を通知 |
 | Server → Client | `private:error` | 無効コード、オフライン、対戦中、DBエラーなど |
 | Server → Client | `matchmaking:queued` | 待機列への参加を通知 |
@@ -36,4 +36,4 @@ Socket.IOはAPIと同じHTTPサーバーへWebSocket/pollingで接続します�
 
 ## 未完了
 
-同じプロセス内での再接続を扱いますが、サーバー再起動後の対戦復帰はありません。結果保存の実DB統合テストと2ブラウザーでのオンライン対戦確認は未実施です。Tailscale Funnelが有効になるまで、公開サイトから自宅APIへ接続できません。DB保存に失敗した場合は、結果画面で報酬が未確定であることを表示します。
+同じプロセス内での再接続を扱いますが、サーバー再起動後の対戦復帰はありません。2ブラウザーでのオンライン対戦確認は未実施です。Tailscale Funnelは有効で、公開サイトからAPIへ接続できます。DB保存に失敗した場合は、結果画面で報酬が未確定であることを表示します。

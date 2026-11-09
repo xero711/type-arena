@@ -9,10 +9,10 @@ import CpuBattleScreen from './components/CpuBattleScreen';
 import EquipmentScreen from './components/EquipmentScreen';
 import HeroSprite from './components/HeroSprite';
 import { defaultEquipment, resolveHeroAppearance, type EquipmentLoadout } from './game/hero-appearance';
+import { appendCpuBattleRecord, clearCpuBattleRecords, readCpuBattleRecords, type CpuBattleRecord } from './game/local-records';
 
 type Screen = 'home' | 'battle' | 'results' | 'records' | 'online' | 'equipment' | 'guild';
-type RecordItem = { result: 'win' | 'lose'; wpm: number; accuracy: number; date: string };
-const recordsKey = 'type-arena-records-v1';
+type RecordItem = CpuBattleRecord;
 const heroEquipmentKey = 'type-arena-equipment-v2';
 const legacyHeroEquipmentKey = 'type-arena-hero-equipment-v1';
 const initialPlayerHp = 100;
@@ -23,10 +23,6 @@ function getCpuAttackDamage(armorDefense: number) {
 
 function getPlayerAttackDamage(weaponAttack: number) {
   return 24 + Math.round(weaponAttack / 2);
-}
-
-function readRecords(): RecordItem[] {
-  try { return JSON.parse(localStorage.getItem(recordsKey) ?? '[]') as RecordItem[]; } catch { return []; }
 }
 
 function readHeroEquipment(): EquipmentLoadout {
@@ -60,10 +56,12 @@ export default function App() {
   const [equipmentReturnScreen, setEquipmentReturnScreen] = useState<'home' | 'battle'>('home');
   const [wpm, setWpm] = useState(0);
   const [correct, setCorrect] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
   const [keystrokes, setKeystrokes] = useState(0);
   const [errors, setErrors] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [records, setRecords] = useState<RecordItem[]>(readRecords);
+  const [records, setRecords] = useState<RecordItem[]>([]);
   const [soundOn, setSoundOn] = useState(true);
   const { user, busy: authBusy, message: authMessage, apiStatus, initialize, login, logout } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +71,12 @@ export default function App() {
   const heroAppearance = resolveHeroAppearance(loadout.armorId, loadout.weaponId);
 
   useEffect(() => initialize(), [initialize]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readCpuBattleRecords().then((saved) => { if (!cancelled) setRecords(saved); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(heroEquipmentKey, JSON.stringify(loadout));
@@ -91,18 +95,21 @@ export default function App() {
 
   useEffect(() => {
     if (screen === 'battle' && result) {
-      const summary: RecordItem = { result, wpm, accuracy, date: new Date().toISOString() };
-      const next = [summary, ...readRecords()].slice(0, 30);
-      localStorage.setItem(recordsKey, JSON.stringify(next));
-      setRecords(next);
-      setScreen('results');
+      const summary: RecordItem = { result, wpm, accuracy, maxCombo, date: new Date().toISOString() };
+      let cancelled = false;
+      void appendCpuBattleRecord(summary).then((next) => {
+        if (cancelled) return;
+        setRecords(next);
+        setScreen('results');
+      });
+      return () => { cancelled = true; };
     }
-  }, [screen, result, wpm, accuracy]);
+  }, [screen, result, wpm, accuracy, maxCombo]);
 
   const startBattle = () => {
     setPromptOrder(shuffled(prompts));
     setPromptIndex(0); setTyped(''); setHp(initialPlayerHp); setMp(30); setPotions(1); setEnemyHp(initialPlayerHp);
-    setWpm(0); setCorrect(0); setKeystrokes(0); setErrors(0); setElapsed(0); setScreen('battle');
+    setWpm(0); setCorrect(0); setCombo(0); setMaxCombo(0); setKeystrokes(0); setErrors(0); setElapsed(0); setScreen('battle');
     window.setTimeout(() => inputRef.current?.focus(), 50);
   };
 
@@ -136,9 +143,13 @@ export default function App() {
     setKeystrokes((count) => count + entered.length);
     if (matchingVariants(prompt.romaji, value).length === 0) {
       setErrors((count) => count + entered.length);
+      setCombo(0);
       return;
     }
     setCorrect((count) => count + entered.length);
+    const nextCombo = combo + entered.length;
+    setCombo(nextCombo);
+    setMaxCombo((best) => Math.max(best, nextCombo));
     setWpm(Math.round((correct + entered.length) / Math.max(1, elapsed + 1) * 12));
     if (isAnyVariantComplete(prompt.romaji, value)) {
       setEnemyHp((hpValue) => Math.max(0, hpValue - getPlayerAttackDamage(heroAppearance.weapon.attack)));
@@ -175,7 +186,7 @@ export default function App() {
     </main>}
     {screen === 'equipment' && <EquipmentScreen loadout={loadout} returnToBattle={equipmentReturnScreen === 'battle'} onEquipArmor={(armorId) => setLoadout((current) => ({ ...current, armorId }))} onEquipWeapon={(weaponId) => setLoadout((current) => ({ ...current, weaponId }))} onBack={() => setScreen(equipmentReturnScreen)} />}
     {screen === 'battle' && <CpuBattleScreen prompt={prompt} promptIndex={promptIndex} typed={typed} hp={hp} mp={mp} enemyHp={enemyHp} potions={potions} elapsed={elapsed} wpm={wpm} accuracy={accuracy} errors={errors} armorId={heroAppearance.armor.id} weaponId={heroAppearance.weapon.id} inputRef={inputRef} onType={onType} onOpenEquipment={openEquipment} onBack={() => setScreen('home')} onAttack={() => inputRef.current?.focus()} onMagic={castMagic} onPotion={usePotion} onFlee={fleeBattle} />}
-    {screen === 'results' && <main className="simple-page"><div className="result-card"><div className={`result-emblem ${records[0]?.result}`}><Trophy size={31}/></div><span className="section-kicker">BATTLE COMPLETE</span><h1>{records[0]?.result === 'win' ? '勝利！' : '惜敗…'}</h1><p>{records[0]?.result === 'win' ? '見事なタイピングだった。次の戦いへ進もう。' : 'もう一度挑戦して、指先を鍛えよう。'}</p><div className="result-stats"><div><small>速度</small><b>{wpm}<i>WPM</i></b></div><div><small>正確率</small><b>{accuracy}<i>%</i></b></div><div><small>経過時間</small><b>{elapsed}<i>秒</i></b></div></div><div className="hero-actions"><button className="primary-button" onClick={startBattle}><RotateCcw size={16}/> もう一度対戦</button><button className="secondary-button" onClick={() => setScreen('home')}>ホームへ</button></div></div></main>}
-    {screen === 'records' && <main className="simple-page records-page"><div className="section-heading"><div><span className="section-kicker">BATTLE HISTORY</span><h2>戦績</h2></div><button className="secondary-button compact" onClick={() => {localStorage.removeItem(recordsKey); setRecords([])}}>記録をリセット</button></div>{records.length ? <div className="records-list">{records.map((item, i) => <div className="record-row" key={`${item.date}-${i}`}><span className={`record-result ${item.result}`}>{item.result === 'win' ? 'WIN' : 'LOSE'}</span><span>{new Date(item.date).toLocaleString('ja-JP')}</span><b>{item.wpm} WPM</b><b>{item.accuracy}% ACC</b></div>)}</div> : <div className="empty-records"><Trophy size={28}/><b>まだ戦績がありません</b><span>CPUと対戦して、最初の記録を作ろう。</span><button className="primary-button" onClick={startBattle}><Swords size={16}/> CPUと対戦</button></div>}</main>}
+    {screen === 'results' && <main className="simple-page"><div className="result-card"><div className={`result-emblem ${records[0]?.result}`}><Trophy size={31}/></div><span className="section-kicker">BATTLE COMPLETE</span><h1>{records[0]?.result === 'win' ? '勝利！' : '惜敗…'}</h1><p>{records[0]?.result === 'win' ? '見事なタイピングだった。次の戦いへ進もう。' : 'もう一度挑戦して、指先を鍛えよう。'}</p><div className="result-stats"><div><small>速度</small><b>{wpm}<i>WPM</i></b></div><div><small>正確率</small><b>{accuracy}<i>%</i></b></div><div><small>最大コンボ</small><b>{maxCombo}<i>回</i></b></div><div><small>経過時間</small><b>{elapsed}<i>秒</i></b></div></div><div className="hero-actions"><button className="primary-button" onClick={startBattle}><RotateCcw size={16}/> もう一度対戦</button><button className="secondary-button" onClick={() => setScreen('home')}>ホームへ</button></div></div></main>}
+    {screen === 'records' && <main className="simple-page records-page"><div className="section-heading"><div><span className="section-kicker">BATTLE HISTORY</span><h2>戦績</h2></div><button className="secondary-button compact" onClick={() => {void clearCpuBattleRecords(); setRecords([])}}>記録をリセット</button></div>{records.length ? <div className="records-list">{records.map((item, i) => <div className="record-row" key={`${item.date}-${i}`}><span className={`record-result ${item.result}`}>{item.result === 'win' ? 'WIN' : 'LOSE'}</span><span>{new Date(item.date).toLocaleString('ja-JP')}</span><b>{item.wpm} WPM</b><b>{item.accuracy}% ACC</b><b>{item.maxCombo} COMBO</b></div>)}</div> : <div className="empty-records"><Trophy size={28}/><b>まだ戦績がありません</b><span>CPUと対戦して、最初の記録を作ろう。</span><button className="primary-button" onClick={startBattle}><Swords size={16}/> CPUと対戦</button></div>}</main>}
   </div>;
 }
