@@ -4,13 +4,15 @@ import { config } from '../config.js';
 
 const hasServiceAccount = Boolean(config.FIREBASE_PROJECT_ID && config.FIREBASE_CLIENT_EMAIL && config.FIREBASE_PRIVATE_KEY);
 
-const adminApp = hasServiceAccount
+const adminApp = config.FIREBASE_PROJECT_ID
   ? (getApps().length ? getApp() : initializeApp({
-      credential: cert({
-        projectId: config.FIREBASE_PROJECT_ID!,
-        clientEmail: config.FIREBASE_CLIENT_EMAIL!,
-        privateKey: config.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
-      }),
+      ...(hasServiceAccount ? {
+        credential: cert({
+          projectId: config.FIREBASE_PROJECT_ID,
+          clientEmail: config.FIREBASE_CLIENT_EMAIL!,
+          privateKey: config.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+        }),
+      } : {}),
       projectId: config.FIREBASE_PROJECT_ID,
     }))
   : null;

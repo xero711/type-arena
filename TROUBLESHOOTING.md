@@ -2,7 +2,7 @@
 
 ## Googleログイン後に「サーバー設定が必要」と表示される
 
-ブラウザー側のGoogleログインとAPI側のFirebase Admin SDK設定は別です。`apps/server/.env`へFirebase Admin SDKの`FIREBASE_PROJECT_ID`、`FIREBASE_CLIENT_EMAIL`、`FIREBASE_PRIVATE_KEY`を設定し、APIを再起動してください。[Firebase設定](FIREBASE_SETUP.md)を参照してください。
+ブラウザー側のGoogleログインとAPI側のFirebase Admin SDK設定は別です。`apps/server/.env`に正しい`FIREBASE_PROJECT_ID`があるか確認してください。IDトークン検証だけなら秘密鍵は不要です。特権付きFirebase APIを使う場合にだけサービスアカウント認証情報が必要です。[Firebase設定](FIREBASE_SETUP.md)を参照してください。
 
 ## APIに接続できない
 

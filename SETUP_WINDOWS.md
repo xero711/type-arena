@@ -46,7 +46,7 @@ pnpm dev
 - API: `127.0.0.1:3001`
 - PostgreSQL: `127.0.0.1:5432`
 - Googleログイン用のWeb設定: 設定済み
-- Firebase Admin SDK秘密鍵: ファイルをこのPCへ保存できていないため未設定
+- Firebase Admin SDK秘密鍵: IDトークン検証だけなら不要。プロジェクトIDは設定済み
 - Tailscale Funnel: tailnetでの有効化待ち
 
 運用方法は[`docs/SERVER_OPERATION.md`](docs/SERVER_OPERATION.md)を参照してください。

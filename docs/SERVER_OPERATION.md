@@ -40,7 +40,7 @@ APIは起動したPowerShellで`Ctrl+C`を押して停止します。DBを止め
 
 ## Google認証
 
-Googleログインをオンラインで使うにはFirebase設定が必要です。`apps/server/.env`にAdmin SDKの3変数、GitHub PagesリポジトリのVariablesにWeb SDKの4変数を登録します。名前と取得方法は[Firebase設定手順](../FIREBASE_SETUP.md)を参照してください。秘密鍵はGitHubへ登録せず、自宅PCの`.env`だけに置きます。
+Googleログインをオンラインで使うにはFirebase設定が必要です。GitHub PagesリポジトリのVariablesにWeb SDKの4変数を登録し、`apps/server/.env`の`FIREBASE_PROJECT_ID`を設定します。IDトークン検証だけならAdmin SDK秘密鍵は不要です。特権付きFirebase APIを追加する場合はサービスアカウント認証情報を自宅PCだけに設定してください。詳しくは[Firebase設定手順](../FIREBASE_SETUP.md)を参照してください。
 
 ## 再起動後の起動
 
