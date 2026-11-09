@@ -120,8 +120,10 @@
   position: relative;
   z-index: 2;
   display: block;
-  width: 100%;
+  width: auto;
   height: 100%;
+  aspect-ratio: 2 / 3;
+  margin: 0 auto;
 }
 
 .hero-sprite {
@@ -129,6 +131,7 @@
   display: block;
   overflow: visible;
   isolation: isolate;
+  aspect-ratio: 2 / 3;
 }
 
 .hero-sprite .hero-body-sprite {
@@ -139,7 +142,7 @@
   height: 100%;
   max-width: none;
   max-height: none;
-  object-fit: contain;
+  object-fit: fill;
   object-position: center bottom;
   image-rendering: pixelated;
 }
@@ -147,22 +150,24 @@
 .hero-sprite .hero-armor-layer {
   position: absolute;
   z-index: 2;
-  left: 29%;
-  top: 34%;
-  width: 47%;
-  height: 30%;
+  left: 34%;
+  top: 43%;
+  width: 37%;
+  height: 22%;
   overflow: visible;
+  background-size: 500% 500%;
   filter: drop-shadow(1px 2px 0 #211d2a);
 }
 
 .hero-sprite .hero-weapon-layer {
   position: absolute;
   z-index: 3;
-  left: 15%;
-  top: 49%;
-  width: 40%;
-  height: 43%;
+  left: 61%;
+  top: 39%;
+  width: 35%;
+  height: 29%;
   overflow: visible;
+  background-size: 500% 500%;
   filter: drop-shadow(2px 3px 0 #211d2a);
 }
 
@@ -342,9 +347,9 @@
   right: 20%;
   bottom: 3%;
   height: 91%;
-  width: 43%;
+  width: auto;
+  aspect-ratio: 2 / 3;
   max-width: 78%;
-  object-fit: contain;
   image-rendering: pixelated;
   filter: drop-shadow(0 12px 13px #05081266);
 }
@@ -1073,20 +1078,44 @@ body {
 .online-hero-avatar > .hero-sprite {
   width: 100%;
   height: 100%;
+  aspect-ratio: 1 / 1;
 }
 
 .online-hero-avatar .hero-armor-layer {
-  left: 27%;
-  top: 31%;
-  width: 52%;
-  height: 34%;
+  left: 34%;
+  top: 43%;
+  width: 37%;
+  height: 22%;
 }
 
 .online-hero-avatar .hero-weapon-layer {
-  left: 12%;
-  top: 43%;
-  width: 48%;
-  height: 48%;
+  left: 61%;
+  top: 39%;
+  width: 35%;
+  height: 29%;
+}
+
+.rival-hero-avatar {
+  display: grid;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 62px;
+  place-items: end center;
+  overflow: hidden;
+}
+
+.rival-hero-avatar > .hero-sprite {
+  width: auto;
+  height: 100%;
+  aspect-ratio: 2 / 3;
+}
+
+.rival-hero-avatar .hero-body-sprite {
+  object-fit: fill;
+}
+
+.rival-hero-sprite .hero-body-sprite {
+  filter: hue-rotate(13deg) brightness(.94);
 }
 
 .online-prompt-panel .typing-input,
@@ -1245,8 +1274,9 @@ select:focus-visible {
 }
 
 .equipment-hero-art {
-  width: min(80%, 280px);
-  height: 345px;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 2 / 3;
   filter: drop-shadow(0 8px 8px #10193d88);
 }
 
@@ -1361,7 +1391,8 @@ select:focus-visible {
 
 .equipment-item-card {
   display: grid;
-  min-height: 102px;
+  min-height: 112px;
+  grid-template-columns: 60px minmax(0, 1fr);
   grid-template-rows: auto auto 1fr auto;
   gap: 4px;
   padding: 8px;
@@ -1380,20 +1411,47 @@ select:focus-visible {
 }
 
 .equipment-item-rarity {
+  grid-column: 2;
+  grid-row: 1;
   color: var(--rarity-color);
   font-size: 8px;
 }
 
+.equipment-artwork {
+  display: block;
+  background-repeat: no-repeat;
+  background-size: 500% 500%;
+  image-rendering: pixelated;
+}
+
+.equipment-card-art {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  width: 60px;
+  height: 78px;
+  align-self: center;
+  border-radius: 3px;
+  background-color: #101a38;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rarity-color), transparent 58%);
+  filter: drop-shadow(0 2px 4px #090d1b99);
+}
+
 .equipment-item-card > b {
+  grid-column: 2;
+  grid-row: 2;
   font-size: 11px;
 }
 
 .equipment-item-description {
+  grid-column: 2;
+  grid-row: 3;
   color: #c3d0f1;
   font-size: 8px;
 }
 
 .equipment-item-footer {
+  grid-column: 2;
+  grid-row: 4;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1413,6 +1471,12 @@ select:focus-visible {
   gap: 2px;
   color: var(--rarity-color);
   font-style: normal;
+}
+
+.hero-sprite .equipment-artwork {
+  background-color: transparent;
+  box-shadow: none;
+  image-rendering: pixelated;
 }
 
 @media (max-width: 760px) {

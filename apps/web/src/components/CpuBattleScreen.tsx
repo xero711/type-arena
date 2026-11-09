@@ -3,7 +3,7 @@ import { Heart, Keyboard, Sparkles, Swords, WandSparkles } from 'lucide-react';
 import type { Prompt } from '@type-arena/game-data';
 import { matchingVariants } from '@type-arena/typing-engine';
 import background from '../assets/market-battle-bg.png';
-import enemySprite from '../assets/shadow-slime.png';
+import enemySprite from '../assets/shadow-imp-v2.png';
 import { resolveHeroAppearance } from '../game/hero-appearance';
 import HeroSprite from './HeroSprite';
 
@@ -61,8 +61,8 @@ export default function CpuBattleScreen(props: Props) {
         <div className="retro-floor-shadow" />
       </div>
       <div className="retro-character enemy-character">
-        <div className="retro-nameplate enemy-nameplate"><b>シャドウスライム</b><span>Lv. 12</span></div>
-        <img src={enemySprite} alt="シャドウスライム" />
+        <div className="retro-nameplate enemy-nameplate"><b>市場のシャドウインプ</b><span>Lv. 12</span></div>
+        <img src={enemySprite} alt="市場のシャドウインプ" />
         <div className="retro-floor-shadow" />
       </div>
 
@@ -96,7 +96,7 @@ export default function CpuBattleScreen(props: Props) {
           <div className="retro-stat-line mp-line"><span>MP</span><HpBar value={mp / 30 * 100} tone="hero" /><b>{mp}/30</b></div>
         </div>
         <div className="retro-status-block enemy-status">
-          <div className="retro-status-heading"><b>シャドウスライム</b><label>CPU</label></div>
+          <div className="retro-status-heading"><b>シャドウインプ</b><label>CPU</label></div>
           <div className="retro-equipment-caption">市場に現れた魔物</div>
           <div className="retro-stat-line"><span><Heart size={12} /> HP</span><HpBar value={enemyHp} tone="enemy" /><b>{Math.ceil(enemyHp)}/100</b></div>
           <div className="retro-stat-line mp-line"><span><Sparkles size={12} /> 行動</span><span className="enemy-action">攻撃準備中</span></div>

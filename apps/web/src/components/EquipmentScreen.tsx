@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { ArrowLeft, Check, Shield, Sparkles, Swords } from 'lucide-react';
 import { armorItems, itemRarities, rarityInfo, weaponItems, type EquipmentItem, type ItemRarity } from '@type-arena/game-data';
 import { resolveHeroAppearance, type EquipmentLoadout } from '../game/hero-appearance';
+import EquipmentArtwork from './EquipmentArtwork';
 import HeroSprite from './HeroSprite';
 
 type Props = {
@@ -62,6 +63,7 @@ export default function EquipmentScreen({ loadout, returnToBattle, onEquipArmor,
           {filteredItems.map((item) => {
             const isEquipped = equippedId === item.id;
             return <button key={item.id} className={`equipment-item-card ${isEquipped ? 'equipped' : ''}`} style={{ '--rarity-color': rarityInfo[item.rarity].color } as CSSProperties} onClick={() => equip(item)} aria-pressed={isEquipped}>
+              <EquipmentArtwork item={item} className="equipment-card-art" />
               <span className="equipment-item-rarity">{rarityInfo[item.rarity].label}</span>
               <b>{item.name}</b>
               <span className="equipment-item-description">{item.description}</span>
