@@ -6,5 +6,6 @@ import './auth.css';
 import './online.css';
 import './online-overrides.css';
 import './retro-battle.css';
+import './guild.css';
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);

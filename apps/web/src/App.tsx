@@ -4,12 +4,13 @@ import { prompts, shuffled, type Prompt } from '@type-arena/game-data';
 import { isAnyVariantComplete, matchingVariants } from '@type-arena/typing-engine';
 import { useAuthStore } from './stores/authStore';
 import OnlineArena from './pages/OnlineArena';
+import GameServicesScreen from './pages/GameServicesScreen';
 import CpuBattleScreen from './components/CpuBattleScreen';
 import EquipmentScreen from './components/EquipmentScreen';
 import HeroSprite from './components/HeroSprite';
 import { defaultEquipment, resolveHeroAppearance, type EquipmentLoadout } from './game/hero-appearance';
 
-type Screen = 'home' | 'battle' | 'results' | 'records' | 'online' | 'equipment';
+type Screen = 'home' | 'battle' | 'results' | 'records' | 'online' | 'equipment' | 'guild';
 type RecordItem = { result: 'win' | 'lose'; wpm: number; accuracy: number; date: string };
 const recordsKey = 'type-arena-records-v1';
 const heroEquipmentKey = 'type-arena-equipment-v2';
@@ -155,11 +156,12 @@ export default function App() {
       <button className="brand" onClick={() => setScreen('home')} aria-label="ホームへ">
         <span className="brand-mark"><span /></span><span className="brand-name">TYPE<span>ARENA</span><small>TYPE TO CONQUER</small></span>
       </button>
-      <nav className="main-nav"><button className={screen === 'home' ? 'active' : ''} onClick={() => setScreen('home')}>ホーム</button><button className={screen === 'equipment' ? 'active' : ''} onClick={openEquipment}>装備</button><button className={screen === 'records' ? 'active' : ''} onClick={() => setScreen('records')}>戦績</button><button onClick={() => setScreen('online')}>オンライン</button></nav>
+      <nav className="main-nav"><button className={screen === 'home' ? 'active' : ''} onClick={() => setScreen('home')}>ホーム</button><button className={screen === 'equipment' ? 'active' : ''} onClick={openEquipment}>装備</button><button className={screen === 'guild' ? 'active' : ''} onClick={() => setScreen('guild')}>ギルド</button><button className={screen === 'records' ? 'active' : ''} onClick={() => setScreen('records')}>戦績</button><button onClick={() => setScreen('online')}>オンライン</button></nav>
       <div className="header-right"><div className={`server-status ${apiStatus}`}><i /> <span>{apiStatus === "online" ? "サーバー接続中" : apiStatus === "degraded" ? "サーバー準備中" : apiStatus === "offline" ? "サーバー未接続" : "接続確認中"}</span></div><button className="icon-button" onClick={() => setSoundOn(!soundOn)} aria-label="サウンド切替">{soundOn ? <Volume2 size={18} /> : <AudioLines size={18} />}</button>{user ? <button className="profile-button" onClick={() => void logout()} title="ログアウト"><span className="avatar-mini"><UserRound size={15} /></span><span>{user.displayName || "プレイヤー"}</span><ChevronDown size={14} /></button> : <button className="login-button" onClick={() => void login()} disabled={authBusy}>{authBusy ? "接続中…" : "Googleログイン"}</button>}</div>
     </header>}
     {authMessage && <div className="auth-message" role="status">{authMessage}</div>}
     {screen === 'online' && <OnlineArena user={user} apiReady={apiStatus === 'online'} heroArmorId={heroAppearance.armor.id} heroWeaponId={heroAppearance.weapon.id} login={login} guestLogin={useAuthStore.getState().guestLogin} onBack={() => setScreen('home')} />}
+    {screen === 'guild' && <GameServicesScreen user={user} apiReady={apiStatus === 'online'} onBack={() => setScreen('home')} onLoadout={setLoadout} />}
     {screen === 'home' && <main className="home-layout">
       <section className="hero-panel">
         <div className="hero-copy"><div className="eyebrow"><span className="eyebrow-line" /> SEASON 01 <span className="eyebrow-dot">/</span> AWAKENING</div><h1>指先で、<br /><span>運命を切り拓け。</span></h1><p>タイピングの速さが、そのまま君の強さになる。<br />仲間と競い、最強のタイパーを目指そう。</p><div className="hero-actions"><button className="primary-button" onClick={startBattle}><Swords size={18} /> CPUと対戦 <ArrowRight size={16} /></button><button className="secondary-button" onClick={() => setScreen('online')}><Swords size={17} /> ランクマッチ</button></div><div className="hero-foot"><span><i className="live-dot" /> オフラインでもプレイ可能</span><span className="foot-divider" /><span><LockKeyhole size={13} /> データはこの端末に保存</span></div></div>

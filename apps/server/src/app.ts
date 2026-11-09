@@ -3,11 +3,14 @@ import cors from '@fastify/cors';
 import { config } from './config.js';
 import { checkDatabase, pool } from './database/client.js';
 import profileRoutes from './routes/profile.js';
+import gameRoutes from './routes/game.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.headers.cookie'] } });
-  await app.register(cors, { origin: config.WEB_ORIGIN, credentials: true });
+  const allowedOrigins = config.WEB_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+  await app.register(cors, { origin: allowedOrigins, credentials: true });
   await app.register(profileRoutes);
+  await app.register(gameRoutes);
 
   const healthCheck = async () => {
     let database: 'online' | 'offline' | 'not-configured' = 'not-configured';

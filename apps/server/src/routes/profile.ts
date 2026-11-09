@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { armorItems, weaponItems } from '@type-arena/game-data';
 import { db } from '../database/client.js';
-import { users } from '../database/schema.js';
+import { coinLedger, equipment, inventory, items, users } from '../database/schema.js';
 import { authenticateBearer } from '../auth/bearer.js';
 
 const updateProfileSchema = z.object({ displayName: z.string().trim().min(1).max(24) }).strict();
@@ -15,14 +16,35 @@ const profileRoutes: FastifyPluginAsync = async (app) => {
 
     const displayName = (auth.identity.name || 'タイパー').trim().slice(0, 24) || 'タイパー';
     const photoUrl = typeof auth.identity.picture === 'string' ? auth.identity.picture : null;
-    const [user] = await db.insert(users).values({
-      firebaseUid: auth.identity.uid,
-      displayName,
-      photoUrl,
-    }).onConflictDoUpdate({
-      target: users.firebaseUid,
-      set: { photoUrl, updatedAt: new Date() },
-    }).returning({ id: users.id, displayName: users.displayName, photoUrl: users.photoUrl, rating: users.rating, coins: users.coins });
+    const user = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(users).values({
+        firebaseUid: auth.identity.uid,
+        displayName,
+        photoUrl,
+      }).onConflictDoNothing({ target: users.firebaseUid })
+        .returning({ id: users.id, displayName: users.displayName, photoUrl: users.photoUrl, rating: users.rating, coins: users.coins });
+      let profile = created;
+      if (profile) {
+        profile = { ...profile, coins: profile.coins + 100 };
+        await tx.update(users).set({ coins: profile.coins }).where(eq(users.id, profile.id));
+        await tx.insert(coinLedger).values({ userId: profile.id, amount: 100, reason: 'welcome', referenceId: 'welcome-v1' }).onConflictDoNothing();
+      } else {
+        const [existing] = await tx.update(users).set({ photoUrl, updatedAt: new Date() })
+          .where(eq(users.firebaseUid, auth.identity.uid))
+          .returning({ id: users.id, displayName: users.displayName, photoUrl: users.photoUrl, rating: users.rating, coins: users.coins });
+        profile = existing;
+      }
+      if (!profile) throw new Error('profile-upsert-failed');
+
+      const starterCodes = [armorItems[0].code, weaponItems[0].code];
+      const starterItems = await tx.select({ id: items.id, code: items.code, type: items.type })
+        .from(items).where(inArray(items.code, starterCodes));
+      for (const item of starterItems) {
+        await tx.insert(inventory).values({ userId: profile.id, itemId: item.id, quantity: 1 }).onConflictDoNothing();
+        await tx.insert(equipment).values({ userId: profile.id, slot: item.type, itemId: item.id }).onConflictDoNothing();
+      }
+      return profile;
+    });
 
     return { user };
   });

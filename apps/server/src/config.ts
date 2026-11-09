@@ -4,7 +4,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
-  WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  WEB_ORIGIN: z.string().default('http://localhost:5173'),
   DATABASE_URL: z.string().url().optional(),
   FIREBASE_PROJECT_ID: z.preprocess((value) => value === '' ? undefined : value, z.string().optional()),
   FIREBASE_CLIENT_EMAIL: z.preprocess((value) => value === '' ? undefined : value, z.string().email().optional()),
