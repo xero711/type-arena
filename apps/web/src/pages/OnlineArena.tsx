@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client';
 import { ArrowLeft, CircleAlert, Clock3, Heart, LoaderCircle, Search, Swords, Trophy } from 'lucide-react';
 import { prompts } from '@type-arena/game-data';
 import { isAnyVariantComplete, matchingVariants } from '@type-arena/typing-engine';
+import { resolveHeroAppearance } from '../game/hero-appearance';
 
 type BattleView = {
   matchId: string;
@@ -18,6 +19,7 @@ type BattleView = {
 type Props = {
   user: User | null;
   apiReady: boolean;
+  heroEquipmentId: string;
   login: () => Promise<void>;
   onBack: () => void;
 };
@@ -28,7 +30,7 @@ function progressColor(value: number) {
   return { width: `${Math.max(0, Math.min(100, value))}%` };
 }
 
-export default function OnlineArena({ user, apiReady, login, onBack }: Props) {
+export default function OnlineArena({ user, apiReady, heroEquipmentId, login, onBack }: Props) {
   const socketRef = useRef<Socket | null>(null);
   const submittedRef = useRef(false);
   const submitAnswerRef = useRef<(answer: string) => void>(() => undefined);
@@ -46,6 +48,7 @@ export default function OnlineArena({ user, apiReady, login, onBack }: Props) {
   const [seconds, setSeconds] = useState(0);
   const [clock, setClock] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
+  const heroAppearance = resolveHeroAppearance(heroEquipmentId);
   const battleRef = useRef<BattleView | null>(battle);
   const outcomeRef = useRef<'win' | 'lose' | null>(outcome);
   battleRef.current = battle;
@@ -175,7 +178,7 @@ export default function OnlineArena({ user, apiReady, login, onBack }: Props) {
       : outcome ? <section className="online-gate"><div className={`online-gate-icon ${outcome}`}><Trophy size={25}/></div><span className="section-kicker">MATCH COMPLETE</span><h1>{outcome === 'win' ? '勝利！' : '敗北'}</h1><p>{outcome === 'win' ? '対戦相手を倒しました。' : '次の対戦で巻き返しましょう。'}</p>{finalStats && <div className="match-result-stats"><span><b>{finalStats.wpm}</b> WPM</span><span><b>{finalStats.accuracy}%</b> 正確率</span><span><b>{finalStats.maxCombo}</b> 最大コンボ</span><span><b>{finalStats.mistakes}</b> ミス</span></div>}{error && <p role="status">{error}</p>}<div className="online-actions"><button className="primary-button" onClick={() => {setBattle(null);setOutcome(null);setFinalStats(null);setError(null);socketRef.current?.emit('matchmaking:join')}}><Search size={16}/> もう一度マッチング</button><button className="secondary-button" onClick={leave}>ホームへ</button></div></section>
       : battle ? <section className="online-battle">
         <div className="online-battle-meta"><span><i className="live-dot"/> SERVER-VERIFIED BATTLE</span><span><Clock3 size={13}/> {String(Math.floor(seconds / 60)).padStart(2,'0')}:{String(seconds % 60).padStart(2,'0')}</span></div>
-        <div className="online-combatants"><div className="online-combatant rival"><div className="fighter-label"><span className="fighter-avatar enemy-avatar">◈</span><div><b>{battle.opponent.displayName}</b><small>RATING {battle.opponent.rating}</small></div><span className="fighter-tag">RIVAL</span></div><div className="online-hp-label"><span><Heart size={13}/> HP {Math.ceil(battle.opponentHp)} / 100</span></div><div className="progress"><span style={progressColor(battle.opponentHp)}/></div></div><div className="online-vs">VS</div><div className="online-combatant self"><div className="fighter-label"><span className="fighter-avatar player-avatar">{user.displayName?.slice(0,1) || 'Y'}</span><div><b>{user.displayName || 'プレイヤー'}</b><small>YOU / RATING SYNCED</small></div><span className="fighter-tag you-tag">YOU</span></div><div className="online-hp-label"><span><Heart size={13}/> HP {Math.ceil(battle.ownHp)} / 100</span></div><div className="progress cyan"><span style={progressColor(battle.ownHp)}/></div></div></div>
+        <div className="online-combatants"><div className="online-combatant rival"><div className="fighter-label"><span className="fighter-avatar enemy-avatar">◈</span><div><b>{battle.opponent.displayName}</b><small>RATING {battle.opponent.rating}</small></div><span className="fighter-tag">RIVAL</span></div><div className="online-hp-label"><span><Heart size={13}/> HP {Math.ceil(battle.opponentHp)} / 100</span></div><div className="progress"><span style={progressColor(battle.opponentHp)}/></div></div><div className="online-vs">VS</div><div className="online-combatant self"><div className="fighter-label"><span className="online-hero-avatar"><img src={heroAppearance.sprite} alt={`勇者。${heroAppearance.armor}と${heroAppearance.weapon}`} /></span><div><b>{user.displayName || 'プレイヤー'}</b><small>勇者 / RATING SYNCED</small></div><span className="fighter-tag you-tag">YOU</span></div><div className="online-hp-label"><span><Heart size={13}/> HP {Math.ceil(battle.ownHp)} / 100</span></div><div className="progress cyan"><span style={progressColor(battle.ownHp)}/></div></div></div>
         <div className="online-prompt-panel"><span className="section-kicker">{battle.prompt.category} / PROMPT {String(battle.completedPrompts + 1).padStart(2,'0')}</span><h1>{battle.prompt.text}</h1><p>{battle.prompt.reading}</p><div className="romaji-line">{[...(matchingVariants(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed)[0] ?? prompts.find((item) => item.id === battle.prompt.id)?.romaji[0] ?? '')].map((char, index) => <span key={`${battle.prompt.id}-${index}`} className={index < typed.length ? 'typed-char' : index === typed.length ? 'next-char' : ''}>{char}</span>)}</div>{countdown > 0 && <div className="battle-countdown">BATTLE STARTS IN {countdown}</div>}<input className="typing-input" value={typed} onKeyDown={onType} onChange={() => undefined} disabled={submitted || countdown > 0} autoComplete="off" autoCapitalize="off" spellCheck={false} placeholder={countdown ? '開始までお待ちください' : `「${battle.prompt.reading}」をローマ字で入力`} aria-label="対戦ローマ字入力" autoFocus/><div className="online-input-stats">正確率 <b>{accuracy}%</b><span>ミス {mistakes}</span><span>最大コンボ {maxCombo}</span></div>{submitted && <div className="waiting-hit"><LoaderCircle size={14}/> サーバーで回答を検証中…</div>}{typed.length > 0 && isAnyVariantComplete(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed) && !submitted && <button className="primary-button online-submit" onClick={() => submitAnswer(typed)}>回答を送信</button>}</div>
         {error && <div className="online-error" role="status"><CircleAlert size={14}/>{error}</div>}
         <div className="online-footnote">入力をサーバーで検証し、ダメージと勝敗を計算します。最高速度は300 WPMに制限されます。</div>
