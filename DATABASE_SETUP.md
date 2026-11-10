@@ -63,13 +63,13 @@ Invoke-RestMethod http://127.0.0.1:3001/ready
 このPCでは日次バックアップタスクが`apps/server/data/backups`に保存し、14日より古いバックアップを整理します。手動作成もできます。APIを停止せずに実行できます。
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-database.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-database.ps1
 ```
 
 復元する場合は、まずAPIを停止してからバックアップファイルを選びます。スクリプトが実行前に確認し、現在のDBのデータを置き換えます。
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore-database.ps1 -BackupPath .\apps\server\data\backups\type-arena-YYYYMMDD-HHmmss.dump
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore-database.ps1 -BackupPath .\apps\server\data\backups\type-arena-YYYYMMDD-HHmmss.dump
 ```
 
 バックアップはこのPC内にあるため、必要に応じて外部ドライブへもコピーしてください。`.dump`ファイルや`.env`をGitHubへ追加しないでください。

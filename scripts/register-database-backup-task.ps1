@@ -2,7 +2,8 @@ $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $backupScript = Join-Path $PSScriptRoot 'backup-database.ps1'
-$powerShellPath = (Get-Command pwsh -ErrorAction Stop).Source
+$powerShellPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+if (-not (Test-Path -LiteralPath $powerShellPath)) { throw "Windows PowerShell was not found: $powerShellPath" }
 $taskName = 'TYPE ARENA Database Backup'
 $currentUser = "$env:USERDOMAIN\$env:USERNAME"
 

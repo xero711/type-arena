@@ -15,7 +15,7 @@ PostgreSQLのバイナリは`apps/server/data/runtime/pgsql`、Node.jsは`apps/s
 ```powershell
 cd "C:\project in server\typing_arena"
 pnpm --filter @type-arena/server build
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-home-server.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-home-server.ps1
 ```
 
 `/api/health`または`/health`の`database`が`online`、`/ready`の`status`が`ready`であることを確認します。
@@ -45,13 +45,13 @@ Windowsタスクスケジューラの`TYPE ARENA Database Backup`が毎日3時�
 バックアップを手動で作成し、形式を確認するには次を実行します。
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-database.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-database.ps1
 ```
 
 復元する場合は先にAPIを停止し、正しいバックアップファイルを指定します。スクリプトは既存DBのデータを置き換える前に確認を表示します。
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore-database.ps1 -BackupPath .\apps\server\data\backups\type-arena-YYYYMMDD-HHmmss.dump
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore-database.ps1 -BackupPath .\apps\server\data\backups\type-arena-YYYYMMDD-HHmmss.dump
 ```
 
 ## 公開API

@@ -12,7 +12,7 @@ pnpm install
 pnpm --filter @type-arena/server db:migrate
 pnpm --filter @type-arena/server db:seed:items
 pnpm --filter @type-arena/server build
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-home-server.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-home-server.ps1
 ```
 
 APIの状態確認:

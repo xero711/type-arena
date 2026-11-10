@@ -10,7 +10,7 @@ $postgresLog = Join-Path $serverData 'postgresql.log'
 $nodeBinary = Join-Path $runtimeRoot 'node\node.exe'
 $serverLog = Join-Path $serverData 'api.log'
 $pgCtl = Join-Path $postgresRoot 'bin\pg_ctl.exe'
-$pnpmCommand = (Get-Command pnpm.cmd -ErrorAction Stop).Source
+$drizzleKitBinary = Join-Path $repositoryRoot 'apps\server\node_modules\drizzle-kit\bin.cjs'
 
 New-Item -ItemType Directory -Force -Path $serverData | Out-Null
 trap {
@@ -21,6 +21,7 @@ trap {
 if (-not (Test-Path -LiteralPath $pgCtl)) { throw "PostgreSQL binary not found: $pgCtl" }
 if (-not (Test-Path -LiteralPath $postgresData)) { throw "PostgreSQL data folder not found: $postgresData" }
 if (-not (Test-Path -LiteralPath $nodeBinary)) { throw "Node.js binary not found: $nodeBinary" }
+if (-not (Test-Path -LiteralPath $drizzleKitBinary)) { throw "Drizzle Kit binary not found: $drizzleKitBinary" }
 
 & $pgCtl -D $postgresData status *> $null
 if ($LASTEXITCODE -ne 0) {
@@ -41,9 +42,9 @@ if ($existingListener) {
   throw "Port $apiPort is already in use but the TYPE ARENA API did not pass its health check."
 }
 
-Push-Location $repositoryRoot
+Push-Location (Join-Path $repositoryRoot 'apps\server')
 try {
-  & $pnpmCommand --filter '@type-arena/server' db:migrate *>> $startupLog
+  & $nodeBinary '.\node_modules\drizzle-kit\bin.cjs' migrate *>> $startupLog
   if ($LASTEXITCODE -ne 0) { throw 'Could not apply database migrations before starting the API.' }
 } finally {
   Pop-Location

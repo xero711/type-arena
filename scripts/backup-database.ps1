@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $serverRoot = Join-Path $repositoryRoot 'apps\server'
 $serverData = Join-Path $serverRoot 'data'
+$databaseConnectionScript = Join-Path $PSScriptRoot 'read-database-connection.ps1'
+. $databaseConnectionScript
 $runtimeRoot = Join-Path $serverData 'runtime'
 $backupRoot = Join-Path $serverData 'backups'
 $backupLog = Join-Path $serverData 'backup.log'
@@ -11,22 +13,19 @@ $postgresLog = Join-Path $serverData 'postgresql.log'
 $pgCtl = Join-Path $runtimeRoot 'pgsql\bin\pg_ctl.exe'
 $pgDump = Join-Path $runtimeRoot 'pgsql\bin\pg_dump.exe'
 $pgRestore = Join-Path $runtimeRoot 'pgsql\bin\pg_restore.exe'
-$nodeBinary = Join-Path $runtimeRoot 'node\node.exe'
 $backupFile = Join-Path $backupRoot ("type-arena-{0}.dump" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 $previousPgPassword = $env:PGPASSWORD
 $pushedLocation = $false
 
 try {
   New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
-  foreach ($requiredPath in @($pgCtl, $pgDump, $pgRestore, $nodeBinary, $postgresData)) {
+  foreach ($requiredPath in @($pgCtl, $pgDump, $pgRestore, $postgresData)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) { throw "Required local database file is missing: $requiredPath" }
   }
 
   Push-Location $serverRoot
   $pushedLocation = $true
-  $settingsJson = & $nodeBinary -e 'require("dotenv").config({ path: ".env" }); const url = new URL(process.env.DATABASE_URL || ""); process.stdout.write(JSON.stringify({ host: url.hostname, port: url.port || "5432", user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: decodeURIComponent(url.pathname.replace(/^\//, "")) }));'
-  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($settingsJson)) { throw 'Could not read the local database connection settings.' }
-  $settings = $settingsJson | ConvertFrom-Json
+  $settings = Get-TypeArenaDatabaseConnection -EnvironmentFilePath (Join-Path $serverRoot '.env')
   if ($settings.host -notin @('127.0.0.1', 'localhost') -or $settings.port -ne '5432') {
     throw 'Backup stopped because DATABASE_URL is not the private local PostgreSQL endpoint.'
   }

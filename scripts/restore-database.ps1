@@ -8,8 +8,9 @@ $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $serverRoot = Join-Path $repositoryRoot 'apps\server'
+$databaseConnectionScript = Join-Path $PSScriptRoot 'read-database-connection.ps1'
+. $databaseConnectionScript
 $runtimeRoot = Join-Path $serverRoot 'data\runtime'
-$nodeBinary = Join-Path $runtimeRoot 'node\node.exe'
 $pgCtl = Join-Path $runtimeRoot 'pgsql\bin\pg_ctl.exe'
 $pgRestore = Join-Path $runtimeRoot 'pgsql\bin\pg_restore.exe'
 $postgresData = Join-Path $runtimeRoot 'postgres-data'
@@ -20,15 +21,13 @@ $pushedLocation = $false
 
 try {
   if (-not (Test-Path -LiteralPath $resolvedBackupPath -PathType Leaf)) { throw 'The selected backup file does not exist.' }
-  foreach ($requiredPath in @($nodeBinary, $pgCtl, $pgRestore, $postgresData)) {
+  foreach ($requiredPath in @($pgCtl, $pgRestore, $postgresData)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) { throw "Required local database file is missing: $requiredPath" }
   }
 
   Push-Location $serverRoot
   $pushedLocation = $true
-  $settingsJson = & $nodeBinary -e 'require("dotenv").config({ path: ".env" }); const url = new URL(process.env.DATABASE_URL || ""); process.stdout.write(JSON.stringify({ host: url.hostname, port: url.port || "5432", user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: decodeURIComponent(url.pathname.replace(/^\//, "")) }));'
-  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($settingsJson)) { throw 'Could not read the local database connection settings.' }
-  $connection = $settingsJson | ConvertFrom-Json
+  $connection = Get-TypeArenaDatabaseConnection -EnvironmentFilePath (Join-Path $serverRoot '.env')
   if ($connection.host -notin @('127.0.0.1', 'localhost') -or $connection.port -ne '5432') {
     throw 'Restore stopped because DATABASE_URL is not the private local PostgreSQL endpoint.'
   }
