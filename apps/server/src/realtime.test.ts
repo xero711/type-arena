@@ -3,7 +3,16 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { io as createClient } from 'socket.io-client';
 import { afterAll, describe, expect, it } from 'vitest';
-import { attachRealtime } from './realtime.js';
+import { attachRealtime, parseWebOrigins } from './realtime.js';
+
+describe('Socket.IO origin configuration', () => {
+  it('treats comma-separated web origins as separate allowed origins', () => {
+    expect(parseWebOrigins('http://localhost:5173, https://xero-x.me')).toEqual([
+      'http://localhost:5173',
+      'https://xero-x.me',
+    ]);
+  });
+});
 
 describe('Socket.IO authentication', () => {
   const httpServer = createServer();
