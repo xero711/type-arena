@@ -16,7 +16,7 @@
 - GitHub Pagesの自動デプロイとTailscale Funnel経由のHTTPS API接続
 - PCログオン時のAPI起動と日次のDBバックアップ
 
-Googleログイン設定はFirebase AuthenticationのGoogleプロバイダーを使います。IDトークン検証にはAdmin秘密鍵を置かず、プロジェクトIDとGoogle公開署名鍵を使います。APIは`https://friday-server.tail3b93c8.ts.net`から利用でき、PostgreSQLは`127.0.0.1:5432`だけで待ち受けます。オンライン対戦を2つの独立したブラウザーセッションで最後まで行う統合確認は未完了です。CPU戦の装備と戦績はブラウザーのlocalStorageに保存されます。
+Googleログイン設定はFirebase AuthenticationのGoogleプロバイダーを使います。IDトークン検証にはAdmin秘密鍵を置かず、プロジェクトIDとGoogle公開署名鍵を使います。APIは`https://friday-server.tail3b93c8.ts.net`から利用でき、PostgreSQLは`127.0.0.1:5432`だけで待ち受けます。オンライン対戦を2つの独立したブラウザーセッションで最後まで行う統合確認は未完了です。CPU戦績はIndexedDBに保存し、装備設定はlocalStorageに保存します。
 
 ## 開発を始める
 
