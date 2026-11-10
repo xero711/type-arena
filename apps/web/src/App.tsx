@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Activity, ArrowDownRight, ArrowRight, AudioLines, Bolt, ChevronDown, CircleHelp, Coins, Flame, Gamepad2, Gauge, LockKeyhole, RotateCcw, Settings2, Shield, Sparkles, Swords, Trophy, UserRound, Volume2 } from 'lucide-react';
-import { balancedPrompts, characterDamage, characters, promptsForCharacter, shuffled, type CharacterId, type Prompt } from '@type-arena/game-data';
+import { balancedPrompts, characters, magicDefenseValue, MAX_MP, mitigateMagic, MP_ON_COMPLETE, promptDamage, promptsForCharacter, shuffled, SPELL_COOLDOWN_MS, SPELL_COST, spellDamage, type CharacterId, type Prompt } from '@type-arena/game-data';
 import { isAnyVariantComplete, matchingVariants } from '@type-arena/typing-engine';
 import { useAuthStore } from './stores/authStore';
 import { useCharacters } from './game/characters';
 import { useRank } from './game/rank';
+import { useOnlineGrowth } from './game/online-growth';
 import OnlineArena from './pages/OnlineArena';
 import GameServicesScreen from './pages/GameServicesScreen';
 import RankingScreen from './pages/RankingScreen';
 import CpuBattleScreen from './components/CpuBattleScreen';
 import CharacterScreen from './components/CharacterScreen';
 import HeroSprite from './components/HeroSprite';
-import { attackDamage, cpuDamagePerSecond, readProgress, saveProgress, upgradeStat, type CharacterProgress } from './game/character-progress';
+import { cpuDamagePerSecond, readProgress, saveProgress, upgradeStat, type CharacterProgress, type CharacterStat } from './game/character-progress';
 import { appendCpuBattleRecord, clearCpuBattleRecords, readCpuBattleRecords, type CpuBattleRecord } from './game/local-records';
 
 type Screen = 'home' | 'battle' | 'results' | 'records' | 'online' | 'character' | 'guild' | 'ranking';
@@ -25,7 +26,10 @@ export default function App() {
   const [promptOrder, setPromptOrder] = useState<Prompt[]>(balancedPrompts);
   const [typed, setTyped] = useState('');
   const [hp, setHp] = useState(initialPlayerHp);
-  const [mp, setMp] = useState(30);
+  const [mp, setMp] = useState(MAX_MP);
+  const [spellReadyAt, setSpellReadyAt] = useState(0);
+  const spellReadyRef = useRef(0);
+  const cpuTickRef = useRef(0);
   const [enemyHp, setEnemyHp] = useState(initialPlayerHp);
   const [potions, setPotions] = useState(1);
   const [progress, setProgress] = useState<CharacterProgress>(readProgress);
@@ -43,6 +47,7 @@ export default function App() {
   const { user, busy: authBusy, message: authMessage, apiStatus, initialize, login, logout } = useAuthStore();
   const { roster, busy: characterBusy, message: characterMessage, act: characterAct } = useCharacters(user, apiStatus === 'online', screen);
   const { rank, refreshRank } = useRank(user, apiStatus === 'online', screen);
+  const { growth: onlineGrowth, busy: onlineGrowthBusy, message: onlineGrowthMessage, upgrade: upgradeOnlineGrowth, refresh: refreshOnlineGrowth } = useOnlineGrowth(user, apiStatus === 'online', screen);
   const inputRef = useRef<HTMLInputElement>(null);
   const prompt: Prompt = promptOrder[promptIndex % promptOrder.length];
   const accuracy = keystrokes ? Math.round(correct / keystrokes * 100) : 100;
@@ -59,13 +64,13 @@ export default function App() {
   useEffect(() => {
     if (screen !== 'battle' || result) return;
     const timer = window.setInterval(() => {
-      setElapsed((value) => value + 1);
-      // CPUは約35WPMで一定の速度を保ち、4回攻撃で決着する。
-      setEnemyHp((value) => Math.max(0, value - 0.75));
-      setHp((value) => Math.max(0, value - cpuDamagePerSecond(progress.defense)));
+      cpuTickRef.current += 1;
+      setElapsed(cpuTickRef.current);
+      const magicHit = cpuTickRef.current % 8 === 0 ? mitigateMagic(6, magicDefenseValue(battleCharacter, progress.magicDefense)) : 0;
+      setHp((value) => Math.max(0, value - cpuDamagePerSecond(progress.defense) - magicHit));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [screen, result, progress.defense]);
+  }, [screen, result, progress.defense, progress.magicDefense, battleCharacter]);
 
   useEffect(() => {
     if (screen === 'battle' && result && !battleSettled.current) {
@@ -85,17 +90,21 @@ export default function App() {
 
   const startBattle = () => {
     battleSettled.current = false; fledBattle.current = false;
+    cpuTickRef.current = 0; spellReadyRef.current = 0; setSpellReadyAt(0);
     setBattleCharacter(roster.selected);
     setPromptOrder(shuffled(promptsForCharacter(roster.selected)));
-    setPromptIndex(0); setTyped(''); setHp(initialPlayerHp); setMp(30); setPotions(1); setEnemyHp(initialPlayerHp);
+    setPromptIndex(0); setTyped(''); setHp(initialPlayerHp); setMp(MAX_MP); setPotions(1); setEnemyHp(initialPlayerHp);
     setWpm(0); setCorrect(0); setCombo(0); setMaxCombo(0); setKeystrokes(0); setErrors(0); setElapsed(0); setScreen('battle');
     window.setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const castMagic = () => {
-    if (mp < 10) return;
-    setMp((value) => Math.max(0, value - 10));
-    setEnemyHp((value) => Math.max(0, value - 18));
+    const now = Date.now();
+    if (mp < SPELL_COST || now < spellReadyRef.current) return;
+    spellReadyRef.current = now + SPELL_COOLDOWN_MS;
+    setSpellReadyAt(spellReadyRef.current);
+    setMp((value) => Math.max(0, value - SPELL_COST));
+    setEnemyHp((value) => Math.max(0, value - spellDamage(battleCharacter, progress.magicAttack, 4)));
   };
 
   const usePotion = () => {
@@ -106,7 +115,7 @@ export default function App() {
 
   const fleeBattle = () => { fledBattle.current = true; setHp(0); };
 
-  const upgrade = (stat: 'attack' | 'defense') => {
+  const upgrade = (stat: CharacterStat) => {
     const next = upgradeStat(progress, stat);
     setProgress(next);
     saveProgress(next);
@@ -132,7 +141,8 @@ export default function App() {
     setMaxCombo((best) => Math.max(best, nextCombo));
     setWpm(Math.round((correct + entered.length) / Math.max(1, elapsed + 1) * 12));
     if (isAnyVariantComplete(prompt.romaji, value)) {
-      setEnemyHp((hpValue) => Math.max(0, hpValue - characterDamage(attackDamage(progress.attack), battleCharacter)));
+      setEnemyHp((hpValue) => Math.max(0, hpValue - promptDamage(24, battleCharacter, progress.attack, progress.magicAttack, 0, 4)));
+      setMp((value) => Math.min(MAX_MP, value + MP_ON_COMPLETE));
       setPromptIndex((index) => index + 1);
       setTyped('');
       return;
@@ -152,7 +162,7 @@ export default function App() {
     </header>}
     {authMessage && <div className="auth-message" role="status">{authMessage}</div>}
     {screen === 'ranking' && <RankingScreen apiReady={apiStatus === 'online'} onBack={() => setScreen('home')} />}
-    {screen === 'online' && <OnlineArena rank={rank} onRankChange={refreshRank} onRanking={() => setScreen('ranking')} user={user} apiReady={apiStatus === 'online'} login={login} guestLogin={useAuthStore.getState().guestLogin} onBack={() => setScreen('home')} />}
+    {screen === 'online' && <OnlineArena rank={rank} onRankChange={refreshRank} onGrowthChange={refreshOnlineGrowth} onRanking={() => setScreen('ranking')} user={user} apiReady={apiStatus === 'online'} login={login} guestLogin={useAuthStore.getState().guestLogin} onBack={() => setScreen('home')} />}
     {screen === 'guild' && <GameServicesScreen user={user} apiReady={apiStatus === 'online'} onBack={() => setScreen('home')} />}
     {screen === 'home' && <main className="home-layout">
       <section className="hero-panel">
@@ -165,8 +175,8 @@ export default function App() {
       <section className="lower-row"><div className="quick-card"><div className="quick-art"><div className="quick-ring"/><Bolt size={34}/></div><div className="quick-content"><span className="section-kicker">READY WHEN YOU ARE</span><h3>まずは腕試し。</h3><p>CPUとの模擬戦で、タイピングの力を試そう。</p></div><button className="round-arrow" onClick={startBattle}><ArrowRight size={19}/></button></div><div className="online-card"><div className="online-status"><span className={`status-pill ${apiStatus}`}><i/> {apiStatus === 'online' ? 'API READY' : apiStatus === 'degraded' ? 'API SETUP' : 'OFFLINE MODE'}</span><Settings2 size={17}/></div><h3>オンライン機能</h3><p>サーバーに接続すると、ランクマッチや<br/>プロフィール同期が利用できます。</p><div className="online-foot"><span><Activity size={14}/> {apiStatus === 'online' ? 'APIへ接続済み' : apiStatus === 'degraded' ? 'DB設定を確認してください' : '接続を自動確認中'}</span><span>詳細 <ArrowDownRight size={13}/></span></div></div></section>
       <footer className="page-footer"><span>© 2025 TYPE ARENA</span><span>BUILT FOR THE LOVE OF TYPING</span><button><CircleHelp size={13}/> ヘルプ</button></footer>
     </main>}
-    {screen === 'character' && <CharacterScreen roster={roster} busy={characterBusy} message={characterMessage} canManage={Boolean(user) && apiStatus === 'online'} onCharacter={characterAct} progress={progress} onUpgrade={upgrade} onBack={() => setScreen('home')} onBattle={startBattle} />}
-    {screen === 'battle' && <CpuBattleScreen character={battleCharacter} prompt={prompt} promptIndex={promptIndex} typed={typed} hp={hp} mp={mp} enemyHp={enemyHp} potions={potions} elapsed={elapsed} wpm={wpm} accuracy={accuracy} errors={errors} attack={progress.attack} defense={progress.defense} inputRef={inputRef} onType={onType} onBack={() => setScreen('home')} onAttack={() => inputRef.current?.focus()} onMagic={castMagic} onPotion={usePotion} onFlee={fleeBattle} />}
+    {screen === 'character' && <CharacterScreen onlineGrowth={onlineGrowth} onlineBusy={onlineGrowthBusy} onlineMessage={onlineGrowthMessage} onOnlineUpgrade={upgradeOnlineGrowth} roster={roster} busy={characterBusy} message={characterMessage} canManage={Boolean(user) && apiStatus === 'online'} onCharacter={characterAct} progress={progress} onUpgrade={upgrade} onBack={() => setScreen('home')} onBattle={startBattle} />}
+    {screen === 'battle' && <CpuBattleScreen spellReadyAt={spellReadyAt} magicAttack={progress.magicAttack} magicDefense={progress.magicDefense} character={battleCharacter} prompt={prompt} promptIndex={promptIndex} typed={typed} hp={hp} mp={mp} enemyHp={enemyHp} potions={potions} elapsed={elapsed} wpm={wpm} accuracy={accuracy} errors={errors} attack={progress.attack} defense={progress.defense} inputRef={inputRef} onType={onType} onBack={() => setScreen('home')} onAttack={() => inputRef.current?.focus()} onMagic={castMagic} onPotion={usePotion} onFlee={fleeBattle} />}
     {screen === 'results' && <main className="simple-page"><div className="result-card"><div className={`result-emblem ${records[0]?.result}`}><Trophy size={31}/></div><span className="section-kicker">BATTLE COMPLETE</span><h1>{records[0]?.result === 'win' ? '勝利！' : '惜敗…'}</h1><p>{records[0]?.result === 'win' ? '見事なタイピングだった。次の戦いへ進もう。' : 'もう一度挑戦して、指先を鍛えよう。'}</p><p>{fledBattle.current ? '逃走したためポイントは獲得できません。' : `強化ポイント +${records[0]?.result === 'win' ? 3 : 1}`}</p><div className="result-stats"><div><small>速度</small><b>{wpm}<i>WPM</i></b></div><div><small>正確率</small><b>{accuracy}<i>%</i></b></div><div><small>最大コンボ</small><b>{maxCombo}<i>回</i></b></div><div><small>経過時間</small><b>{elapsed}<i>秒</i></b></div></div><div className="hero-actions"><button className="primary-button" onClick={startBattle}><RotateCcw size={16}/> もう一度対戦</button><button className="secondary-button" onClick={() => setScreen('home')}>ホームへ</button></div></div></main>}
     {screen === 'records' && <main className="simple-page records-page"><div className="section-heading"><div><span className="section-kicker">BATTLE HISTORY</span><h2>戦績</h2></div><button className="secondary-button compact" onClick={() => {void clearCpuBattleRecords(); setRecords([])}}>記録をリセット</button></div>{records.length ? <div className="records-list">{records.map((item, i) => <div className="record-row" key={`${item.date}-${i}`}><span className={`record-result ${item.result}`}>{item.result === 'win' ? 'WIN' : 'LOSE'}</span><span>{new Date(item.date).toLocaleString('ja-JP')}</span><b>{item.wpm} WPM</b><b>{item.accuracy}% ACC</b><b>{item.maxCombo} COMBO</b></div>)}</div> : <div className="empty-records"><Trophy size={28}/><b>まだ戦績がありません</b><span>CPUと対戦して、最初の記録を作ろう。</span><button className="primary-button" onClick={startBattle}><Swords size={16}/> CPUと対戦</button></div>}</main>}
   </div>;

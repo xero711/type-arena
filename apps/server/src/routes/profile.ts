@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { and, eq } from 'drizzle-orm';
-import { characters, isCharacterId } from '@type-arena/game-data';
+import { characters, isCharacterId, MAX_GROWTH_LEVEL, type GrowthStat } from '@type-arena/game-data';
 import { z } from 'zod';
 import { db } from '../database/client.js';
 import { coinLedger, users } from '../database/schema.js';
@@ -56,7 +56,7 @@ const profileRoutes: FastifyPluginAsync = async (app) => {
     const auth = await authenticateBearer(request.headers.authorization);
     if (!auth.ok) return reply.code(auth.status).send({ error: auth.code });
     if (!db) return reply.code(503).send({ error: 'database-not-configured' });
-    const body = z.object({ character: z.string(), action: z.enum(['unlock', 'select']) }).strict().safeParse(request.body);
+    const body = z.object({ character: z.string(), action: z.enum(['unlock', 'select']), expectedPrice: z.number().int().min(0).optional() }).strict().safeParse(request.body);
     if (!body.success || !isCharacterId(body.data.character)) return reply.code(400).send({ error: 'invalid-character' });
     const { character, action } = body.data;
     const result = await db.transaction(async (tx) => {
@@ -69,11 +69,43 @@ const profileRoutes: FastifyPluginAsync = async (app) => {
         await tx.update(users).set({ selectedCharacter: character, updatedAt: new Date() }).where(eq(users.id, user.id));
       } else if (!owned) {
         const price = characters[character].price;
+        if (body.data.expectedPrice !== price) return { error: 'price-changed' as const, price };
         if (user.coins < price) return { error: 'insufficient-coins' as const };
         await tx.update(users).set({ coins: user.coins - price, updatedAt: new Date() }).where(eq(users.id, user.id));
         await tx.insert(coinLedger).values({ userId: user.id, amount: -price, reason: 'character-unlock', referenceId: character });
       }
       return { ok: true as const };
+    });
+    if ('error' in result) return reply.code(result.error === 'profile-not-found' ? 404 : 400).send(result);
+    return result;
+  });
+
+  app.get('/api/me/growth', async (request, reply) => {
+    const auth = await authenticateBearer(request.headers.authorization);
+    if (!auth.ok) return reply.code(auth.status).send({ error: auth.code });
+    if (!db) return reply.code(503).send({ error: 'database-not-configured' });
+    const [growth] = await db.select({ points: users.growthPoints, attack: users.attackLevel, defense: users.defenseLevel, magicAttack: users.magicAttackLevel, magicDefense: users.magicDefenseLevel })
+      .from(users).where(eq(users.firebaseUid, auth.identity.uid)).limit(1);
+    if (!growth) return reply.code(404).send({ error: 'profile-not-found' });
+    return growth;
+  });
+
+  app.post('/api/me/growth', async (request, reply) => {
+    const auth = await authenticateBearer(request.headers.authorization);
+    if (!auth.ok) return reply.code(auth.status).send({ error: auth.code });
+    if (!db) return reply.code(503).send({ error: 'database-not-configured' });
+    const body = z.object({ stat: z.enum(['attack', 'defense', 'magicAttack', 'magicDefense']) }).strict().safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid-stat' });
+    const stat: GrowthStat = body.data.stat;
+    const result = await db.transaction(async (tx) => {
+      const [current] = await tx.select({ id: users.id, points: users.growthPoints, attack: users.attackLevel, defense: users.defenseLevel, magicAttack: users.magicAttackLevel, magicDefense: users.magicDefenseLevel })
+        .from(users).where(eq(users.firebaseUid, auth.identity.uid)).for('update');
+      if (!current) return { error: 'profile-not-found' as const };
+      if (current.points < 1) return { error: 'insufficient-points' as const };
+      if (current[stat] >= MAX_GROWTH_LEVEL) return { error: 'stat-maxed' as const };
+      const field = { attack: 'attackLevel', defense: 'defenseLevel', magicAttack: 'magicAttackLevel', magicDefense: 'magicDefenseLevel' } as const;
+      await tx.update(users).set({ growthPoints: current.points - 1, [field[stat]]: current[stat] + 1, updatedAt: new Date() }).where(eq(users.id, current.id));
+      return { points: current.points - 1, attack: current.attack, defense: current.defense, magicAttack: current.magicAttack, magicDefense: current.magicDefense, [stat]: current[stat] + 1 };
     });
     if ('error' in result) return reply.code(result.error === 'profile-not-found' ? 404 : 400).send(result);
     return result;

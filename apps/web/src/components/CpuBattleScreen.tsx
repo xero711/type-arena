@@ -1,6 +1,6 @@
 import type { ChangeEvent, CSSProperties, RefObject } from 'react';
 import { Heart, Keyboard, Sparkles, Swords, WandSparkles } from 'lucide-react';
-import { characters, type CharacterId, type Prompt } from '@type-arena/game-data';
+import { characters, magicAttackValue, magicDefenseValue, MAX_MP, SPELL_COST, type CharacterId, type Prompt } from '@type-arena/game-data';
 import { matchingVariants } from '@type-arena/typing-engine';
 import background from '../assets/market-battle-bg.png';
 import enemySprite from '../assets/shadow-imp-v2.png';
@@ -8,6 +8,9 @@ import HeroSprite from './HeroSprite';
 
 type Props = {
   character: CharacterId;
+  magicAttack: number;
+  magicDefense: number;
+  spellReadyAt: number;
   prompt: Prompt;
   promptIndex: number;
   typed: string;
@@ -36,7 +39,7 @@ function HpBar({ value, tone }: { value: number; tone: 'hero' | 'enemy' }) {
 
 export default function CpuBattleScreen(props: Props) {
   const {
-    character, prompt, promptIndex, typed, hp, mp, enemyHp, potions, elapsed, wpm,
+    character, magicAttack, magicDefense, spellReadyAt, prompt, promptIndex, typed, hp, mp, enemyHp, potions, elapsed, wpm,
     accuracy, errors, attack, defense, inputRef, onType,
     onBack, onAttack, onMagic, onPotion, onFlee,
   } = props;
@@ -80,24 +83,24 @@ export default function CpuBattleScreen(props: Props) {
     <section className="retro-console" aria-label="戦闘コマンドとステータス">
       <div className="retro-commands">
         <button onClick={onAttack}><Swords size={16} />こうげき</button>
-        <button onClick={onMagic} disabled={mp < 10}><WandSparkles size={16} />まほう <small>10 MP</small></button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => { onMagic(); inputRef.current?.focus(); }} disabled={mp < SPELL_COST || Date.now() < spellReadyAt}><WandSparkles size={16} />まほう <small>{SPELL_COST} MP</small></button>
         <button onClick={onPotion} disabled={potions < 1 || hp >= 100}><Heart size={16} />かいふく <small>×{potions}</small></button>
         <button onClick={onFlee}>にげる</button>
       </div>
       <div className="retro-status">
         <div className="retro-status-block hero-status">
-          <div className="retro-status-heading"><b>勇者</b><label>YOU</label></div>
+          <div className="retro-status-heading"><b>{characters[character].name}</b><label>YOU</label></div>
           <div className="retro-equipment-caption">
-            攻撃 Lv.{attack}　防御 Lv.{defense}
+            攻撃 Lv.{attack}　防御 Lv.{defense}　魔攻 {magicAttackValue(character, magicAttack)}　魔防 {magicDefenseValue(character, magicDefense)}
           </div>
           <div className="retro-stat-line"><span>HP</span><HpBar value={hp} tone="hero" /><b>{Math.ceil(hp)}/100</b></div>
-          <div className="retro-stat-line mp-line"><span>MP</span><HpBar value={mp / 30 * 100} tone="hero" /><b>{mp}/30</b></div>
+          <div className="retro-stat-line mp-line"><span>MP</span><HpBar value={mp / MAX_MP * 100} tone="hero" /><b>{mp}/{MAX_MP}</b></div>
         </div>
         <div className="retro-status-block enemy-status">
           <div className="retro-status-heading"><b>シャドウインプ</b><label>CPU</label></div>
           <div className="retro-equipment-caption">市場に現れた魔物</div>
           <div className="retro-stat-line"><span><Heart size={12} /> HP</span><HpBar value={enemyHp} tone="enemy" /><b>{Math.ceil(enemyHp)}/100</b></div>
-          <div className="retro-stat-line mp-line"><span><Sparkles size={12} /> 行動</span><span className="enemy-action">攻撃準備中</span></div>
+          <div className="retro-stat-line mp-line"><span><Sparkles size={12} /> 行動</span><span className="enemy-action">魔法まで {8 - (elapsed % 8)} 秒</span></div>
         </div>
       </div>
     </section>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
-import { isCharacterId, type CharacterId } from '@type-arena/game-data';
+import { characters, isCharacterId, type CharacterId } from '@type-arena/game-data';
 
 type Roster = { coins: number; selected: CharacterId; unlocked: CharacterId[] };
 const initial: Roster = { coins: 0, selected: 'balanced', unlocked: ['balanced'] };
@@ -47,10 +47,10 @@ export function useCharacters(user: User | null, apiReady: boolean, screen: stri
     setBusy(true); setMessage(null);
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`${apiUrl}/api/me/characters`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ character, action }) });
+      const response = await fetch(`${apiUrl}/api/me/characters`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ character, action, ...(action === 'unlock' ? { expectedPrice: characters[character].price } : {}) }) });
       if (!response.ok) {
         const data = await response.json() as { error?: string };
-        setMessage(data.error === 'insufficient-coins' ? 'コインが足りません。ランクマッチで集めましょう。' : '操作できませんでした。もう一度お試しください。');
+        setMessage(data.error === 'insufficient-coins' ? 'コインが足りません。ランクマッチで集めましょう。' : data.error === 'price-changed' ? '価格が変更されました。画面を再読み込みしてください。' : '操作できませんでした。もう一度お試しください。');
         return;
       }
       await refresh();

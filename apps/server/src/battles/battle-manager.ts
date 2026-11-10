@@ -1,11 +1,14 @@
-import { characterDamage, promptsForCharacter, shuffled, type CharacterId, type Prompt } from '@type-arena/game-data';
+import { magicDefenseValue, MAX_GROWTH_LEVEL, MAX_MP, MP_ON_COMPLETE, promptDamage, promptsForCharacter, shuffled, SPELL_COOLDOWN_MS, SPELL_COST, spellDamage, type CharacterId, type GrowthLevels, type Prompt } from '@type-arena/game-data';
 import type { QueueEntry } from '../matchmaking/matchmaker.js';
 
-export type BattlePlayer = Pick<QueueEntry, 'firebaseUid' | 'userId' | 'socketId' | 'displayName' | 'rating' | 'character'>;
+export type BattlePlayer = Pick<QueueEntry, 'firebaseUid' | 'userId' | 'socketId' | 'displayName' | 'rating' | 'character' | 'growth'>;
 export type BattlePlayerResult = { firebaseUid: string; userId: string; rating: number; wpm: number; accuracy: number; characters: number; mistakes: number; maxCombo: number };
 export type BattleOutcome = { matchId: string; winnerUid: string | null; loserUid: string | null; reason: 'knockout' | 'disconnect' | 'timeout'; finishedAt: number; players: [BattlePlayerResult, BattlePlayerResult] };
 export type BattleSubmitResult =
   | { ok: false; code: 'battle-not-started' | 'battle-finished' | 'not-a-player' | 'wrong-prompt' | 'incomplete-input' | 'too-fast' }
+  | { ok: true; damage: number; snapshots: [BattleSnapshot, BattleSnapshot]; outcome: BattleOutcome | null };
+export type BattleSpellResult =
+  | { ok: false; code: 'battle-not-started' | 'battle-finished' | 'not-a-player' | 'insufficient-mp' | 'spell-cooldown' }
   | { ok: true; damage: number; snapshots: [BattleSnapshot, BattleSnapshot]; outcome: BattleOutcome | null };
 export type BattleKeyResult =
   | { ok: false; code: 'battle-not-started' | 'battle-finished' | 'not-a-player' | 'wrong-prompt' | 'invalid-key' | 'key-rate-limited' }
@@ -17,6 +20,10 @@ export type BattleSnapshot = {
   character: CharacterId;
   ownHp: number;
   opponentHp: number;
+  ownMp: number;
+  opponentMp: number;
+  growth: GrowthLevels;
+  spellReadyAt: number;
   prompt: Pick<Prompt, 'id' | 'text' | 'reading' | 'category'>;
   completedPrompts: number;
   typed: string;
@@ -27,7 +34,7 @@ export type BattleSnapshot = {
   endsAt: number;
 };
 
-type PlayerState = { player: BattlePlayer; promptOrder: Prompt[]; hp: number; promptIndex: number; promptStartedAt: number; lastKeyAt: number; totalCharacters: number; completedPrompts: number; currentInput: string; correctKeystrokes: number; mistakes: number; currentCombo: number; maxCombo: number };
+type PlayerState = { player: BattlePlayer; growth: GrowthLevels; promptOrder: Prompt[]; hp: number; mp: number; spellReadyAt: number; promptIndex: number; promptStartedAt: number; lastKeyAt: number; totalCharacters: number; completedPrompts: number; currentInput: string; correctKeystrokes: number; mistakes: number; currentCombo: number; maxCombo: number };
 type Battle = { matchId: string; players: [PlayerState, PlayerState]; startsAt: number; endsAt: number; outcome: BattleOutcome | null };
 
 /** サーバーがプロンプト順、入力検証、HP、攻撃力、勝敗を保持する。 */
@@ -50,7 +57,7 @@ export class BattleManager {
       startsAt: now + countdownMs,
       endsAt: now + countdownMs + durationMs,
       outcome: null,
-      players: players.map((player) => ({ player, promptOrder: promptOrderFor(player), hp: 100, promptIndex: 0, promptStartedAt: now + countdownMs, lastKeyAt: now + countdownMs - 20, totalCharacters: 0, completedPrompts: 0, currentInput: '', correctKeystrokes: 0, mistakes: 0, currentCombo: 0, maxCombo: 0 })) as [PlayerState, PlayerState],
+      players: players.map((player) => ({ player, growth: this.normalizedGrowth(player.growth), promptOrder: promptOrderFor(player), hp: 100, mp: MAX_MP, spellReadyAt: now + countdownMs, promptIndex: 0, promptStartedAt: now + countdownMs, lastKeyAt: now + countdownMs - 20, totalCharacters: 0, completedPrompts: 0, currentInput: '', correctKeystrokes: 0, mistakes: 0, currentCombo: 0, maxCombo: 0 })) as [PlayerState, PlayerState],
     };
     this.battles.set(matchId, state);
     this.uidToMatch.set(players[0].firebaseUid, matchId);
@@ -116,12 +123,15 @@ export class BattleManager {
     const minimumMs = normalizedInput.length * 40; // 300 WPMを超える即時送信を拒否する。
     if (elapsedMs < minimumMs) return { ok: false, code: 'too-fast' };
     const wpm = Math.min(300, Math.round(normalizedInput.length * 12_000 / Math.max(1, elapsedMs)));
-    const damage = characterDamage(Math.min(35, Math.max(18, 18 + Math.floor(Math.max(0, wpm - 30) / 20))), player.player.character ?? 'balanced');
+    const attacker = player.player.character ?? 'balanced';
+    const defender = opponent.player.character ?? 'balanced';
+    const damage = promptDamage(Math.min(35, Math.max(18, 18 + Math.floor(Math.max(0, wpm - 30) / 20))), attacker, player.growth.attack, player.growth.magicAttack, opponent.growth.defense, magicDefenseValue(defender, opponent.growth.magicDefense));
     player.totalCharacters += normalizedInput.length;
     player.completedPrompts += 1;
     player.promptIndex += 1;
     player.promptStartedAt = now;
     player.currentInput = '';
+    player.mp = Math.min(MAX_MP, player.mp + MP_ON_COMPLETE);
     opponent.hp = Math.max(0, opponent.hp - damage);
 
     if (opponent.hp === 0) {
@@ -131,6 +141,28 @@ export class BattleManager {
     }
     const snapshots: [BattleSnapshot, BattleSnapshot] = [this.makeSnapshot(battle, 0), this.makeSnapshot(battle, 1)];
     return { ok: true, damage, snapshots, outcome: battle.outcome };
+  }
+
+  castSpell(matchId: string, firebaseUid: string, now = Date.now()): BattleSpellResult {
+    const battle = this.battles.get(matchId);
+    if (!battle || battle.outcome || now >= battle.endsAt) return { ok: false, code: 'battle-finished' };
+    if (now < battle.startsAt) return { ok: false, code: 'battle-not-started' };
+    const index = battle.players.findIndex((entry) => entry.player.firebaseUid === firebaseUid);
+    if (index < 0) return { ok: false, code: 'not-a-player' };
+    const player = battle.players[index as 0 | 1];
+    const opponent = battle.players[index === 0 ? 1 : 0];
+    if (player.mp < SPELL_COST) return { ok: false, code: 'insufficient-mp' };
+    if (now < player.spellReadyAt) return { ok: false, code: 'spell-cooldown' };
+    player.mp -= SPELL_COST;
+    player.spellReadyAt = now + SPELL_COOLDOWN_MS;
+    const damage = spellDamage(player.player.character ?? 'balanced', player.growth.magicAttack, magicDefenseValue(opponent.player.character ?? 'balanced', opponent.growth.magicDefense));
+    opponent.hp = Math.max(0, opponent.hp - damage);
+    if (opponent.hp === 0) {
+      battle.outcome = this.makeOutcome(battle, firebaseUid, opponent.player.firebaseUid, 'knockout', now);
+      this.uidToMatch.delete(firebaseUid);
+      this.uidToMatch.delete(opponent.player.firebaseUid);
+    }
+    return { ok: true, damage, snapshots: [this.makeSnapshot(battle, 0), this.makeSnapshot(battle, 1)], outcome: battle.outcome };
   }
 
   forfeit(matchId: string, disconnectedUid: string, now = Date.now()): BattleOutcome | null {
@@ -160,6 +192,11 @@ export class BattleManager {
   matchForUser(firebaseUid: string): string | null { return this.uidToMatch.get(firebaseUid) ?? null; }
 
   clear(matchId: string): void { this.battles.delete(matchId); }
+
+  private normalizedGrowth(value?: GrowthLevels): GrowthLevels {
+    const level = (n: unknown) => typeof n === 'number' && Number.isInteger(n) ? Math.max(0, Math.min(MAX_GROWTH_LEVEL, n)) : 0;
+    return { attack: level(value?.attack), defense: level(value?.defense), magicAttack: level(value?.magicAttack), magicDefense: level(value?.magicDefense) };
+  }
 
   private promptFor(player: PlayerState): Prompt {
     return player.promptOrder[player.promptIndex % player.promptOrder.length];
@@ -204,6 +241,10 @@ export class BattleManager {
       character: own.player.character ?? 'balanced',
       ownHp: own.hp,
       opponentHp: opponent.hp,
+      ownMp: own.mp,
+      opponentMp: opponent.mp,
+      growth: own.growth,
+      spellReadyAt: own.spellReadyAt,
       prompt: { id: prompt.id, text: prompt.text, reading: prompt.reading, category: prompt.category },
       completedPrompts: own.completedPrompts,
       typed: own.currentInput,

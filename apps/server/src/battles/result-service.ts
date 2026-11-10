@@ -14,6 +14,11 @@ export function calculateRatingChanges(ratings: [number, number], winnerIndex: 0
   return [changeOne, -changeOne];
 }
 
+export function growthPointReward(outcome: BattleOutcome, playerUid: string, mode: MatchMode): number {
+  if (mode !== 'ranked' || outcome.reason === 'disconnect') return 0;
+  return outcome.winnerUid === null ? 2 : outcome.winnerUid === playerUid ? 3 : 1;
+}
+
 export type PersistedMatchResult = {
   ratingChanges: [number, number];
   coinRewards: [number, number];
@@ -56,7 +61,7 @@ export async function persistBattleOutcome(database: NonNullable<typeof db>, out
     }
 
     const playerIds = outcome.players.map((player) => player.userId);
-    const locked = await tx.select({ id: users.id, rating: users.rating, placementMatches: users.placementMatches }).from(users)
+    const locked = await tx.select({ id: users.id, rating: users.rating, placementMatches: users.placementMatches, growthPoints: users.growthPoints }).from(users)
       .where(inArray(users.id, playerIds)).orderBy(users.id).for('update');
     if (locked.length !== 2) throw new Error('match-player-missing');
     // A duplicate settlement may have waited on the same player locks.
@@ -67,6 +72,7 @@ export async function persistBattleOutcome(database: NonNullable<typeof db>, out
     }
     const ratingById = new Map(locked.map((player) => [player.id, player.rating]));
     const placementsById = new Map(locked.map((player) => [player.id, player.placementMatches]));
+    const pointsById = new Map(locked.map((player) => [player.id, player.growthPoints]));
     const p1 = outcome.players[0];
     const p2 = outcome.players[1];
     const ratings: [number, number] = [ratingById.get(p1.userId)!, ratingById.get(p2.userId)!];
@@ -75,7 +81,8 @@ export async function persistBattleOutcome(database: NonNullable<typeof db>, out
 
     for (const [index, player] of outcome.players.entries()) {
       const reward = coinRewards[index as 0 | 1];
-      await tx.update(users).set({ rating: ratings[index as 0 | 1] + ratingChanges[index as 0 | 1], placementMatches: mode === 'ranked' ? Math.min(PLACEMENT_MATCHES, placementsById.get(player.userId)! + 1) : placementsById.get(player.userId)!, updatedAt: new Date(outcome.finishedAt) })
+      const pointsEarned = growthPointReward(outcome, player.firebaseUid, mode);
+      await tx.update(users).set({ rating: ratings[index as 0 | 1] + ratingChanges[index as 0 | 1], placementMatches: mode === 'ranked' ? Math.min(PLACEMENT_MATCHES, placementsById.get(player.userId)! + 1) : placementsById.get(player.userId)!, growthPoints: pointsById.get(player.userId)! + pointsEarned, updatedAt: new Date(outcome.finishedAt) })
         .where(eq(users.id, player.userId));
       // コインは原子的な加算SQLにし、同じ参照IDの台帳行を二重登録させない。
       if (reward > 0) {

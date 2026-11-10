@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { characterDamage, prompts } from '@type-arena/game-data';
+import { characterDamage, characters, magicAttackValue, magicDefenseValue, promptDamage, prompts, spellDamage } from '@type-arena/game-data';
 import { BattleManager, type BattleOutcome, type BattlePlayer } from './battle-manager.js';
 
 const players: [BattlePlayer, BattlePlayer] = [
@@ -75,6 +75,72 @@ describe('server-authoritative battle', () => {
     expect(wordResult).toMatchObject({ ok: true, damage: characterDamage(22, 'word') });
     expect(characterDamage(22, 'word')).toBeLessThan(characterDamage(22, 'balanced'));
     expect(characterDamage(22, 'long')).toBeGreaterThan(characterDamage(22, 'balanced'));
+  });
+
+  it('gives magic characters higher initial magic stats and uses magic defense for their typing attacks', () => {
+    expect(Object.values(characters).every((character) => character.price === 3000)).toBe(true);
+    expect(magicAttackValue('mage-long')).toBeGreaterThan(magicAttackValue('balanced'));
+    expect(magicDefenseValue('mage-word')).toBeGreaterThan(magicDefenseValue('balanced'));
+    const damage = promptDamage(20, 'mage-long', 0, 0, 0, 2);
+    expect(damage).toBeGreaterThan(promptDamage(20, 'mage-long', 0, 0, 0, 12));
+    expect(promptDamage(20, 'mage-word', 0, 0, 0, 2)).toBeLessThan(damage);
+    expect(promptDamage(20, 'mage-long', 0, 4, 0, 2)).toBeGreaterThan(damage);
+    expect(spellDamage('mage-long', 0, 2)).toBeGreaterThan(spellDamage('balanced', 0, 2));
+  });
+
+  it('validates spell timing and MP on the server and applies magic defense', () => {
+    const battle = new BattleManager();
+    battle.create('magic', [{ ...players[0], character: 'mage-long', growth: { attack: 0, defense: 0, magicAttack: 5, magicDefense: 0 } }, players[1]], 1000, 3000);
+    expect(battle.castSpell('magic', 'uid-a', 3999)).toMatchObject({ ok: false, code: 'battle-not-started' });
+    expect(battle.castSpell('magic', 'intruder', 4000)).toMatchObject({ ok: false, code: 'not-a-player' });
+    const first = battle.castSpell('magic', 'uid-a', 4000);
+    expect(first).toMatchObject({ ok: true, damage: spellDamage('mage-long', 5, magicDefenseValue('balanced')) });
+    expect(battle.snapshot('magic', 'uid-a')).toMatchObject({ ownMp: 20, opponentMp: 30 });
+    expect(battle.castSpell('magic', 'uid-a', 4001)).toMatchObject({ ok: false, code: 'spell-cooldown' });
+    expect(battle.castSpell('magic', 'uid-a', 6500)).toMatchObject({ ok: true });
+    expect(battle.castSpell('magic', 'uid-a', 9000)).toMatchObject({ ok: true });
+    expect(battle.castSpell('magic', 'uid-a', 11500)).toMatchObject({ ok: false, code: 'insufficient-mp' });
+  });
+
+  it('uses the target magic defense and clamps invalid online growth levels', () => {
+    const standard = new BattleManager();
+    standard.create('magic-standard', [{ ...players[0], character: 'mage-word' }, players[1]], 0, 0);
+    const defended = new BattleManager();
+    defended.create('magic-defended', [{ ...players[0], character: 'mage-word' }, { ...players[1], character: 'mage-long', growth: { attack: -3, defense: 200, magicAttack: 0, magicDefense: 200 } }], 0, 0);
+    const a = standard.castSpell('magic-standard', 'uid-a', 0);
+    const b = defended.castSpell('magic-defended', 'uid-a', 0);
+    expect(a.ok && b.ok && b.damage < a.damage).toBe(true);
+    expect(defended.snapshot('magic-defended', 'uid-b')!.growth).toMatchObject({ attack: 0, defense: 10, magicDefense: 10 });
+  });
+
+  it('can finish a match with a server-validated spell', () => {
+    const battle = new BattleManager();
+    battle.create('magic-finish', [{ ...players[0], character: 'long' }, players[1]], 0, 0, 120_000);
+    for (const now of [20_000, 40_000, 60_000]) {
+      const view = battle.snapshot('magic-finish', 'uid-a')!;
+      const answer = prompts.find((prompt) => prompt.id === view.prompt.id)!.romaji[0];
+      [...answer].forEach((key, index) => battle.typeKey('magic-finish', 'uid-a', view.prompt.id, key, now + index * 20));
+      expect(battle.submit('magic-finish', 'uid-a', view.prompt.id, now + 5000)).toMatchObject({ ok: true, outcome: null });
+    }
+    expect(battle.castSpell('magic-finish', 'uid-a', 66_000)).toMatchObject({ ok: true, outcome: { winnerUid: 'uid-a', reason: 'knockout' } });
+  });
+
+  it('restores MP after a completed prompt without exceeding the cap', () => {
+    const battle = new BattleManager();
+    battle.create('magic-recovery', [{ ...players[0], character: 'mage-word' }, players[1]], 0, 0);
+    expect(battle.castSpell('magic-recovery', 'uid-a', 0)).toMatchObject({ ok: true });
+    const view = battle.snapshot('magic-recovery', 'uid-a')!;
+    const answer = prompts.find((prompt) => prompt.id === view.prompt.id)!.romaji[0];
+    [...answer].forEach((key, index) => battle.typeKey('magic-recovery', 'uid-a', view.prompt.id, key, 100 + index * 100));
+    expect(battle.submit('magic-recovery', 'uid-a', view.prompt.id, 100 + answer.length * 100)).toMatchObject({ ok: true });
+    expect(battle.snapshot('magic-recovery', 'uid-a')!.ownMp).toBe(23);
+    for (const now of [2000, 4000, 6000]) {
+      const next = battle.snapshot('magic-recovery', 'uid-a')!;
+      const word = prompts.find((prompt) => prompt.id === next.prompt.id)!.romaji[0];
+      [...word].forEach((key, index) => battle.typeKey('magic-recovery', 'uid-a', next.prompt.id, key, now + index * 100));
+      expect(battle.submit('magic-recovery', 'uid-a', next.prompt.id, now + word.length * 100)).toMatchObject({ ok: true });
+    }
+    expect(battle.snapshot('magic-recovery', 'uid-a')!.ownMp).toBe(30);
   });
 
   it('includes the players partial input in a resumable server snapshot', () => {

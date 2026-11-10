@@ -16,6 +16,11 @@ export const users = pgTable('users', {
   placementMatches: integer('placement_matches').notNull().default(0),
   coins: integer('coins').notNull().default(0),
   selectedCharacter: text('selected_character').notNull().default('balanced'),
+  growthPoints: integer('growth_points').notNull().default(0),
+  attackLevel: integer('attack_level').notNull().default(0),
+  defenseLevel: integer('defense_level').notNull().default(0),
+  magicAttackLevel: integer('magic_attack_level').notNull().default(0),
+  magicDefenseLevel: integer('magic_defense_level').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

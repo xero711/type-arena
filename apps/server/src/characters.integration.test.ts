@@ -82,7 +82,8 @@ describe.skipIf(!testDatabaseUrl)('character purchase and online integration (Po
     await pool.query("INSERT INTO matches (id, mode, player_one_id, player_two_id) VALUES ('old-ranked-1', 'ranked', 'old', 'old-opponent'), ('old-ranked-2', 'ranked', 'old', 'old-opponent'), ('old-private', 'private', 'old', 'old-opponent')");
     await pool.query(await readFile(new URL('../drizzle/0004_bizarre_hardball.sql', import.meta.url), 'utf8'));
     await pool.query(await readFile(new URL('../drizzle/0005_nostalgic_veda.sql', import.meta.url), 'utf8'));
-    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('one', 'test-one', 'One', 1000), ('two', 'test-two', 'Two', 500), ('poor', 'test-poor', 'Poor', 499)");
+    await pool.query(await readFile(new URL('../drizzle/0006_sour_captain_marvel.sql', import.meta.url), 'utf8'));
+    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('one', 'test-one', 'One', 6000), ('two', 'test-two', 'Two', 3000), ('poor', 'test-poor', 'Poor', 2999)");
     await pool.query('INSERT INTO items (id, code, type) VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9), ($10, $11, $12)', [
       'test-weapon', weaponItems[1].code, 'weapon', 'test-armor', armorItems[1].code, 'armor',
       'starter-weapon', weaponItems[0].code, 'weapon', 'starter-armor', armorItems[0].code, 'armor',
@@ -117,26 +118,26 @@ describe.skipIf(!testDatabaseUrl)('character purchase and online integration (Po
     await admin.end();
   });
 
-  it('charges 500 once even for concurrent requests, rejects locked selections and persists ownership', async () => {
-    expect((await request('test-one', 'GET')).json()).toMatchObject({ coins: 1000, selected: 'balanced', unlocked: ['balanced'] });
+  it('charges 3000 once even for concurrent requests, rejects locked selections and persists ownership', async () => {
+    expect((await request('test-one', 'GET')).json()).toMatchObject({ coins: 6000, selected: 'balanced', unlocked: ['balanced'] });
     expect((await request('test-one', 'POST', { character: 'long', action: 'select' })).json()).toMatchObject({ error: 'character-locked' });
-    expect((await request('test-poor', 'POST', { character: 'word', action: 'unlock' })).json()).toMatchObject({ error: 'insufficient-coins' });
-    const unlocks = await Promise.all([request('test-one', 'POST', { character: 'long', action: 'unlock' }), request('test-one', 'POST', { character: 'long', action: 'unlock' })]);
+    expect((await request('test-poor', 'POST', { character: 'word', action: 'unlock', expectedPrice: 3000 })).json()).toMatchObject({ error: 'insufficient-coins' });
+    const unlocks = await Promise.all([request('test-one', 'POST', { character: 'long', action: 'unlock', expectedPrice: 3000 }), request('test-one', 'POST', { character: 'long', action: 'unlock', expectedPrice: 3000 })]);
     expect(unlocks.map((response) => response.statusCode)).toEqual([200, 200]);
     expect((await request('test-one', 'POST', { character: 'long', action: 'select' })).statusCode).toBe(200);
-    expect((await request('test-one', 'GET')).json()).toMatchObject({ coins: 500, selected: 'long', unlocked: ['balanced', 'long'] });
+    expect((await request('test-one', 'GET')).json()).toMatchObject({ coins: 3000, selected: 'long', unlocked: ['balanced', 'long'] });
     const ledger = await pool.query("SELECT amount, reference_id FROM coin_ledger WHERE user_id = 'one'");
-    expect(ledger.rows).toEqual([{ amount: -500, reference_id: 'long' }]);
-    expect((await request('test-two', 'POST', { character: 'word', action: 'unlock' })).statusCode).toBe(200);
+    expect(ledger.rows).toEqual([{ amount: -3000, reference_id: 'long' }]);
+    expect((await request('test-two', 'POST', { character: 'word', action: 'unlock', expectedPrice: 3000 })).statusCode).toBe(200);
     expect((await request('test-two', 'POST', { character: 'word', action: 'select' })).statusCode).toBe(200);
     expect((await request('test-two', 'GET')).json()).toMatchObject({ coins: 0, selected: 'word', unlocked: ['balanced', 'word'] });
   });
 
-  it('allows only one of two simultaneous character purchases when the wallet has 500 coins', async () => {
-    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('race', 'test-race', 'Race', 500)");
+  it('allows only one of two simultaneous character purchases when the wallet has 3000 coins', async () => {
+    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('race', 'test-race', 'Race', 3000)");
     const results = await Promise.all([
-      request('test-race', 'POST', { character: 'long', action: 'unlock' }),
-      request('test-race', 'POST', { character: 'word', action: 'unlock' }),
+      request('test-race', 'POST', { character: 'long', action: 'unlock', expectedPrice: 3000 }),
+      request('test-race', 'POST', { character: 'word', action: 'unlock', expectedPrice: 3000 }),
     ]);
     expect(results.map((response) => response.statusCode).sort()).toEqual([200, 400]);
     expect(results.find((response) => response.statusCode === 400)?.json()).toMatchObject({ error: 'insufficient-coins' });
@@ -144,7 +145,35 @@ describe.skipIf(!testDatabaseUrl)('character purchase and online integration (Po
     expect(roster).toMatchObject({ coins: 0, selected: 'balanced' });
     expect(roster.unlocked).toHaveLength(2);
     const ledger = await pool.query("SELECT amount FROM coin_ledger WHERE user_id = 'race' AND reason = 'character-unlock'");
-    expect(ledger.rows).toEqual([{ amount: -500 }]);
+    expect(ledger.rows).toEqual([{ amount: -3000 }]);
+  });
+
+  it('rejects stale clients and old prices without charging coins', async () => {
+    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('stale', 'test-stale', 'Stale', 3000)");
+    expect((await request('test-stale', 'POST', { character: 'long', action: 'unlock' })).json()).toMatchObject({ error: 'price-changed', price: 3000 });
+    expect((await request('test-stale', 'POST', { character: 'long', action: 'unlock', expectedPrice: 500 })).json()).toMatchObject({ error: 'price-changed', price: 3000 });
+    expect((await request('test-stale', 'GET')).json()).toMatchObject({ coins: 3000, unlocked: ['balanced'] });
+  });
+
+  it('keeps previously unlocked characters when the price changes', async () => {
+    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('legacy-owner', 'test-legacy-owner', 'Legacy', 0)");
+    await pool.query("INSERT INTO coin_ledger (id, user_id, amount, reason, reference_id) VALUES ('legacy-unlock', 'legacy-owner', -500, 'character-unlock', 'long')");
+    expect((await request('test-legacy-owner', 'GET')).json()).toMatchObject({ coins: 0, unlocked: ['balanced', 'long'] });
+    expect((await request('test-legacy-owner', 'POST', { character: 'long', action: 'select' })).statusCode).toBe(200);
+    expect((await request('test-legacy-owner', 'GET')).json()).toMatchObject({ coins: 0, selected: 'long' });
+  });
+
+  it('saves online magic upgrades and spends a point only once under concurrency', async () => {
+    await pool.query("UPDATE users SET growth_points = 1 WHERE firebase_uid = 'test-new'");
+    const growthRequest = (method: 'GET' | 'POST', payload?: object) => app.inject({ method, url: '/api/me/growth', headers: { authorization: 'Bearer test-new' }, ...(payload ? { payload } : {}) });
+    expect((await growthRequest('GET')).json()).toMatchObject({ points: 1, magicAttack: 0, magicDefense: 0 });
+    const attempts = await Promise.all([growthRequest('POST', { stat: 'magicAttack' }), growthRequest('POST', { stat: 'magicDefense' })]);
+    expect(attempts.map((response) => response.statusCode).sort()).toEqual([200, 400]);
+    const saved = (await growthRequest('GET')).json();
+    expect(saved.points).toBe(0);
+    expect(saved.magicAttack + saved.magicDefense).toBe(1);
+    expect((await growthRequest('POST', { stat: 'magicAttack' })).json()).toMatchObject({ error: 'insufficient-points' });
+    expect((await growthRequest('POST', { stat: 'untrusted' })).statusCode).toBe(400);
   });
 
   it('migrates old ratings, counts five ranked results, and displays real leaderboard positions', async () => {
@@ -161,6 +190,10 @@ describe.skipIf(!testDatabaseUrl)('character purchase and online integration (Po
       ],
     });
     for (let i = 0; i < 4; i += 1) await persistBattleOutcome(mockState.database!, outcome(`ranked-${i}`, i === 3 ? 'test-rank-two' : 'test-rank-one'));
+    const growthBefore = await app.inject({ method: 'GET', url: '/api/me/growth', headers: { authorization: 'Bearer test-rank-one' } });
+    expect(growthBefore.json()).toMatchObject({ points: 10, magicAttack: 0, magicDefense: 0 });
+    const magicUpgrade = await app.inject({ method: 'POST', url: '/api/me/growth', headers: { authorization: 'Bearer test-rank-one' }, payload: { stat: 'magicAttack' } });
+    expect(magicUpgrade.json()).toMatchObject({ points: 9, magicAttack: 1 });
     const four = (await rankRequest('test-rank-one')).json();
     expect(four).toMatchObject({ placementMatches: 4, title: '未認定', position: null });
     expect(four.rating).not.toBe(500);
@@ -169,6 +202,7 @@ describe.skipIf(!testDatabaseUrl)('character purchase and online integration (Po
     expect((await rankRequest('test-rank-one')).json()).toMatchObject({ rating: four.rating, placementMatches: 4 });
     await Promise.all([persistBattleOutcome(mockState.database!, outcome('ranked-4')), persistBattleOutcome(mockState.database!, outcome('ranked-4'))]);
     expect((await rankRequest('test-rank-one')).json()).toMatchObject({ placementMatches: 5, title: 'シルバー', position: 1 });
+    expect((await app.inject({ method: 'GET', url: '/api/me/growth', headers: { authorization: 'Bearer test-rank-one' } })).json()).toMatchObject({ points: 12, magicAttack: 1 });
     const leaderboard = (await app.inject({ method: 'GET', url: '/api/leaderboard' })).json().ranking;
     expect(leaderboard).toHaveLength(2);
     expect(leaderboard[0]).toMatchObject({ displayName: 'Rank one', rank: 1, title: 'シルバー' });
@@ -180,11 +214,14 @@ describe.skipIf(!testDatabaseUrl)('character purchase and online integration (Po
   });
 
   it('uses the saved characters in private matches too', async () => {
-    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('private-one', 'test-private-one', 'Private one', 500), ('private-two', 'test-private-two', 'Private two', 500)");
-    for (const [uid, character] of [['test-private-one', 'long'], ['test-private-two', 'word']]) {
-      expect((await request(uid, 'POST', { character, action: 'unlock' })).statusCode).toBe(200);
+    await pool.query("INSERT INTO users (id, firebase_uid, display_name, coins) VALUES ('private-one', 'test-private-one', 'Private one', 3000), ('private-two', 'test-private-two', 'Private two', 3000)");
+    for (const [uid, character] of [['test-private-one', 'mage-long'], ['test-private-two', 'mage-word']]) {
+      expect((await request(uid, 'POST', { character, action: 'unlock', expectedPrice: 3000 })).statusCode).toBe(200);
       expect((await request(uid, 'POST', { character, action: 'select' })).statusCode).toBe(200);
     }
+    await pool.query("UPDATE users SET growth_points = 1 WHERE id = 'private-one'");
+    const upgraded = await app.inject({ method: 'POST', url: '/api/me/growth', headers: { authorization: 'Bearer test-private-one' }, payload: { stat: 'magicAttack' } });
+    expect(upgraded.json()).toMatchObject({ points: 0, magicAttack: 1 });
     const one = createClient(`http://127.0.0.1:${port}`, { auth: { token: 'test-private-one' }, transports: ['websocket'], reconnection: false });
     const two = createClient(`http://127.0.0.1:${port}`, { auth: { token: 'test-private-two' }, transports: ['websocket'], reconnection: false });
     clients.push(one, two);
@@ -196,9 +233,19 @@ describe.skipIf(!testDatabaseUrl)('character purchase and online integration (Po
     const twoStart = waitFor<BattleSnapshot & { mode: string }>(two, 'battle:starting');
     two.emit('private:join', { code });
     const [longView, wordView] = await Promise.all([oneStart, twoStart]);
-    expect(longView).toMatchObject({ mode: 'private', character: 'long', prompt: { category: '長文' }, opponent: { character: 'word' } });
-    expect(wordView).toMatchObject({ mode: 'private', character: 'word', prompt: { category: '単語' }, opponent: { character: 'long' } });
-  });
+    expect(longView).toMatchObject({ mode: 'private', character: 'mage-long', prompt: { category: '長文' }, opponent: { character: 'mage-word' } });
+    expect(wordView).toMatchObject({ mode: 'private', character: 'mage-word', prompt: { category: '単語' }, opponent: { character: 'mage-long' } });
+    expect(longView).toMatchObject({ ownMp: 30, growth: { magicAttack: 1 } });
+    await pause(Math.max(0, longView.startsAt - Date.now()) + 30);
+    const hit = waitFor<{ damage: number; type: string }>(one, 'battle:damage');
+    const updated = waitFor<BattleSnapshot>(one, 'battle:update');
+    one.emit('battle:spell', { matchId: longView.matchId });
+    expect(await hit).toMatchObject({ type: 'magic', damage: expect.any(Number) });
+    expect(await updated).toMatchObject({ ownMp: 20 });
+    const cooldown = waitFor<{ code: string }>(one, 'battle:spell-error');
+    one.emit('battle:spell', { matchId: longView.matchId });
+    expect(await cooldown).toMatchObject({ code: 'spell-cooldown' });
+  }, 10000);
 
   it('uses each purchased character and applies its damage in an actual online match', async () => {
     const one = createClient(`http://127.0.0.1:${port}`, { auth: { token: 'test-one' }, transports: ['websocket'], reconnection: false });

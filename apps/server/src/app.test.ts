@@ -37,6 +37,8 @@ describe('authentication boundary', () => {
   it('requires authentication for character ownership and purchases', async () => {
     const app = await appPromise;
     expect((await app.inject({ method: 'GET', url: '/api/me/characters' })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/me/growth' })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'POST', url: '/api/me/growth', payload: { stat: 'magicAttack' } })).statusCode).toBe(401);
     expect((await app.inject({ method: 'POST', url: '/api/me/characters', payload: { character: 'long', action: 'unlock' } })).statusCode).toBe(401);
   });
 

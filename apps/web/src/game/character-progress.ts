@@ -1,8 +1,9 @@
-export type CharacterProgress = { points: number; attack: number; defense: number };
-export type CharacterStat = 'attack' | 'defense';
+import type { GrowthStat } from '@type-arena/game-data';
+export type CharacterProgress = { points: number; attack: number; defense: number; magicAttack: number; magicDefense: number };
+export type CharacterStat = GrowthStat;
 export const maxStatLevel = 10;
 const storageKey = 'type-arena-character-progress-v1';
-const initialProgress: CharacterProgress = { points: 0, attack: 0, defense: 0 };
+const initialProgress: CharacterProgress = { points: 0, attack: 0, defense: 0, magicAttack: 0, magicDefense: 0 };
 
 export function readProgress(): CharacterProgress {
   try {
@@ -11,7 +12,11 @@ export function readProgress(): CharacterProgress {
     const saved = value as Partial<CharacterProgress>;
     const valid = (n: unknown, max: number) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 && n <= max;
     if (!valid(saved.points, Number.MAX_SAFE_INTEGER) || !valid(saved.attack, maxStatLevel) || !valid(saved.defense, maxStatLevel)) return { ...initialProgress };
-    return saved as CharacterProgress;
+    // Existing saves predate the two magic levels; keep their points and physical upgrades.
+    const magicAttack = saved.magicAttack ?? 0;
+    const magicDefense = saved.magicDefense ?? 0;
+    if (!valid(magicAttack, maxStatLevel) || !valid(magicDefense, maxStatLevel)) return { ...initialProgress };
+    return { points: saved.points!, attack: saved.attack!, defense: saved.defense!, magicAttack, magicDefense };
   } catch { return { ...initialProgress }; }
 }
 

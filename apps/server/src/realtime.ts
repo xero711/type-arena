@@ -10,7 +10,7 @@ import { createPrivateMatchId, PrivateMatchmaker, type PrivateMatchInvite } from
 import { z } from 'zod';
 import { isCharacterId } from '@type-arena/game-data';
 import { BattleManager, type BattleOutcome } from './battles/battle-manager.js';
-import { persistBattleOutcome, type MatchMode } from './battles/result-service.js';
+import { growthPointReward, persistBattleOutcome, type MatchMode } from './battles/result-service.js';
 
 declare module 'socket.io' {
   interface SocketData { firebaseUid: string }
@@ -59,7 +59,7 @@ export function attachRealtime(httpServer: HttpServer) {
         resultSaved: saved !== null,
         mode: match.mode,
         stats: { wpm: player.wpm, accuracy: player.accuracy, characters: player.characters, mistakes: player.mistakes, maxCombo: player.maxCombo },
-        ...(saved ? { ratingChange: saved.ratingChanges[index as 0 | 1], rating: saved.ratings[index as 0 | 1], coins: saved.coinRewards[index as 0 | 1] } : {}),
+        ...(saved ? { ratingChange: saved.ratingChanges[index as 0 | 1], rating: saved.ratings[index as 0 | 1], coins: saved.coinRewards[index as 0 | 1], growthPoints: growthPointReward(outcome, player.firebaseUid, match.mode) } : {}),
       });
     }
     if (!saved) io.to(match.room).emit('battle:persistence-error', { code: 'result-not-saved' });
@@ -150,9 +150,9 @@ export function attachRealtime(httpServer: HttpServer) {
     socket.on('matchmaking:join', async () => {
       if (activeMatches.has(firebaseUid)) return socket.emit('matchmaking:error', { code: 'already-in-match' });
       if (!db) return socket.emit('matchmaking:error', { code: 'database-not-configured' });
-      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string } | undefined;
+      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string; attack: number; defense: number; magicAttack: number; magicDefense: number } | undefined;
       try {
-        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter })
+        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter, attack: users.attackLevel, defense: users.defenseLevel, magicAttack: users.magicAttackLevel, magicDefense: users.magicDefenseLevel })
           .from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
       } catch {
         return socket.emit('matchmaking:error', { code: 'database-unavailable' });
@@ -168,6 +168,7 @@ export function attachRealtime(httpServer: HttpServer) {
         displayName: profile.displayName,
         rating: profile.rating,
         character: isCharacterId(profile.selectedCharacter) ? profile.selectedCharacter : 'balanced',
+        growth: { attack: profile.attack, defense: profile.defense, magicAttack: profile.magicAttack, magicDefense: profile.magicDefense },
         queuedAt: Date.now(),
       });
       if (result.kind === 'already-queued') return socket.emit('matchmaking:error', { code: 'already-queued' });
@@ -187,9 +188,9 @@ export function attachRealtime(httpServer: HttpServer) {
       const cancelled = matchmaker.removeUser(firebaseUid);
       if (cancelled) socket.emit('matchmaking:cancelled', { cancelled: true });
 
-      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string } | undefined;
+      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string; attack: number; defense: number; magicAttack: number; magicDefense: number } | undefined;
       try {
-        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter })
+        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter, attack: users.attackLevel, defense: users.defenseLevel, magicAttack: users.magicAttackLevel, magicDefense: users.magicDefenseLevel })
           .from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
       } catch {
         return emitPrivateError(socket.id, 'database-unavailable');
@@ -205,6 +206,7 @@ export function attachRealtime(httpServer: HttpServer) {
         displayName: profile.displayName,
         rating: profile.rating,
         character: isCharacterId(profile.selectedCharacter) ? profile.selectedCharacter : 'balanced',
+        growth: { attack: profile.attack, defense: profile.defense, magicAttack: profile.magicAttack, magicDefense: profile.magicDefense },
         queuedAt: Date.now(),
       });
       socket.emit('private:created', { code: invite.code, expiresAt: invite.expiresAt });
@@ -228,9 +230,9 @@ export function attachRealtime(httpServer: HttpServer) {
         return emitPrivateError(socket.id, 'host-offline');
       }
 
-      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string } | undefined;
+      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string; attack: number; defense: number; magicAttack: number; magicDefense: number } | undefined;
       try {
-        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter })
+        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter, attack: users.attackLevel, defense: users.defenseLevel, magicAttack: users.magicAttackLevel, magicDefense: users.magicDefenseLevel })
           .from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
       } catch {
         return emitPrivateError(socket.id, 'database-unavailable');
@@ -251,9 +253,25 @@ export function attachRealtime(httpServer: HttpServer) {
         displayName: profile.displayName,
         rating: profile.rating,
         character: isCharacterId(profile.selectedCharacter) ? profile.selectedCharacter : 'balanced',
+        growth: { attack: profile.attack, defense: profile.defense, magicAttack: profile.magicAttack, magicDefense: profile.magicDefense },
         queuedAt: Date.now(),
       };
       await startMatch(createPrivateMatchId(), [consumed.host, joiner], 'private');
+    });
+
+    socket.on('battle:spell', (payload: unknown) => {
+      const parsed = z.object({ matchId: z.string().uuid() }).strict().safeParse(payload);
+      if (!parsed.success) return socket.emit('battle:spell-error', { code: 'invalid-payload' });
+      const match = activeMatches.get(firebaseUid);
+      if (!match || match.matchId !== parsed.data.matchId) return socket.emit('battle:spell-error', { code: 'not-in-match' });
+      const timedOut = battles.timeout(parsed.data.matchId);
+      if (timedOut) return void finishMatch(match, timedOut);
+      const result = battles.castSpell(parsed.data.matchId, firebaseUid);
+      if (!result.ok) return socket.emit('battle:spell-error', { code: result.code });
+      io.to(match.room).emit('battle:damage', { attacker: match.playerIndex, damage: result.damage, type: 'magic' });
+      socket.emit('battle:update', result.snapshots[match.playerIndex]);
+      io.to(match.opponentSocketId).emit('battle:update', result.snapshots[match.playerIndex === 0 ? 1 : 0]);
+      if (result.outcome) void finishMatch(match, result.outcome);
     });
 
     socket.on('battle:key', (payload: unknown) => {

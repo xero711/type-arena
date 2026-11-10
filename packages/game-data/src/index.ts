@@ -54,17 +54,51 @@ export function rankName(rating: number, placementMatches: number, leaderboardPo
   return tier.name === 'タイプキング' && leaderboardPosition != null ? `${tier.name} #${leaderboardPosition}` : tier.name;
 }
 
-export type CharacterId = 'balanced' | 'long' | 'word';
-export const characters: Record<CharacterId, { name: string; description: string; damageMultiplier: number; price: number }> = {
-  balanced: { name: '勇者', description: 'バランスのよい問題とダメージ', damageMultiplier: 1, price: 0 },
-  long: { name: '炎の戦士', description: '長文を打ち切ると大ダメージ', damageMultiplier: 1.8, price: 500 },
-  word: { name: '疾風の剣士', description: '単語だけ出題されるがダメージは低い', damageMultiplier: 0.55, price: 500 },
+export type CharacterId = 'balanced' | 'long' | 'word' | 'mage-long' | 'mage-word';
+export type GrowthStat = 'attack' | 'defense' | 'magicAttack' | 'magicDefense';
+export type GrowthLevels = Record<GrowthStat, number>;
+export const MAX_GROWTH_LEVEL = 10;
+export const MAX_MP = 30;
+export const SPELL_COST = 10;
+export const SPELL_COOLDOWN_MS = 2500;
+export const MP_ON_COMPLETE = 3;
+export type CharacterDefinition = {
+  name: string; description: string; damageMultiplier: number; price: number;
+  promptType: 'balanced' | 'long' | 'word'; attackType: 'physical' | 'magic';
+  baseMagicAttack: number; baseMagicDefense: number;
+};
+export const characters: Record<CharacterId, CharacterDefinition> = {
+  balanced: { name: '勇者', description: 'バランスのよい問題とダメージ', damageMultiplier: 1, price: 3000, promptType: 'balanced', attackType: 'physical', baseMagicAttack: 12, baseMagicDefense: 2 },
+  long: { name: '炎の戦士', description: '長文を打ち切ると大ダメージ', damageMultiplier: 1.8, price: 3000, promptType: 'long', attackType: 'physical', baseMagicAttack: 12, baseMagicDefense: 2 },
+  word: { name: '疾風の剣士', description: '単語だけ出題されるがダメージは低い', damageMultiplier: 0.55, price: 3000, promptType: 'word', attackType: 'physical', baseMagicAttack: 12, baseMagicDefense: 2 },
+  'mage-long': { name: '星詠みの魔導士', description: '長文を打ち切ると強力な魔法攻撃', damageMultiplier: 1.8, price: 3000, promptType: 'long', attackType: 'magic', baseMagicAttack: 22, baseMagicDefense: 8 },
+  'mage-word': { name: '閃光の魔術師', description: '単語だけの魔法攻撃。威力は低め', damageMultiplier: 0.55, price: 3000, promptType: 'word', attackType: 'magic', baseMagicAttack: 22, baseMagicDefense: 8 },
 };
 export function isCharacterId(value: unknown): value is CharacterId {
   return typeof value === 'string' && Object.hasOwn(characters, value);
 }
 export function characterDamage(base: number, character: CharacterId): number {
   return Math.max(1, Math.round(base * characters[character].damageMultiplier));
+}
+export function magicAttackValue(character: CharacterId, level = 0): number {
+  return characters[character].baseMagicAttack + level * 2;
+}
+export function magicDefenseValue(character: CharacterId, level = 0): number {
+  return characters[character].baseMagicDefense + level;
+}
+export function mitigateMagic(power: number, defense: number): number {
+  return Math.max(1, Math.round(power - defense * 0.6));
+}
+/** Completed prompts use a character's attack type; spell casts always deal magic damage. */
+export function promptDamage(base: number, character: CharacterId, attackLevel: number, magicAttackLevel: number, targetDefense: number, targetMagicDefense: number): number {
+  if (characters[character].attackType === 'magic') {
+    const power = characterDamage(base + magicAttackValue(character, magicAttackLevel) - 12, character);
+    return mitigateMagic(power, targetMagicDefense);
+  }
+  return Math.max(1, characterDamage(base + attackLevel * 2, character) - targetDefense);
+}
+export function spellDamage(character: CharacterId, magicAttackLevel: number, targetMagicDefense: number): number {
+  return mitigateMagic(12 + magicAttackValue(character, magicAttackLevel) / 2, targetMagicDefense);
 }
 const longPrompts: Prompt[] = [
   { id: 'long1', text: '青い空を見上げて未来への道を進もう', reading: 'あおいそらをみあげてみらいへのみちをすすもう', romaji: ['aoisorawomiagetemiraihenomichiwosusumou'], category: '長文' },
@@ -84,7 +118,8 @@ const wordPrompts: Prompt[] = [
 ];
 export const prompts: Prompt[] = [...balancedPrompts, ...longPrompts, ...wordPrompts];
 export function promptsForCharacter(character: CharacterId): Prompt[] {
-  return character === 'long' ? longPrompts : character === 'word' ? wordPrompts : balancedPrompts;
+  const type = characters[character].promptType;
+  return type === 'long' ? longPrompts : type === 'word' ? wordPrompts : balancedPrompts;
 }
 
 for (const prompt of prompts) prompt.romaji = [...new Set([...prompt.romaji, ...readingVariants(prompt.reading)])];

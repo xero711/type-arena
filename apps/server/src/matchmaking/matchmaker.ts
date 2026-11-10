@@ -7,6 +7,7 @@ export type QueueEntry = {
   displayName: string;
   rating: number;
   character?: import('@type-arena/game-data').CharacterId;
+  growth?: import('@type-arena/game-data').GrowthLevels;
   queuedAt: number;
 };
 

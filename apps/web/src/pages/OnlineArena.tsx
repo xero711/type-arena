@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { User } from 'firebase/auth';
 import { io, type Socket } from 'socket.io-client';
-import { ArrowLeft, CircleAlert, Clock3, Heart, LoaderCircle, Search, Swords, Trophy } from 'lucide-react';
-import { characters, prompts, type CharacterId } from '@type-arena/game-data';
+import { ArrowLeft, CircleAlert, Clock3, Heart, LoaderCircle, Search, Swords, Trophy, WandSparkles } from 'lucide-react';
+import { characters, magicAttackValue, magicDefenseValue, MAX_MP, prompts, SPELL_COST, type CharacterId, type GrowthLevels } from '@type-arena/game-data';
 import { isAnyVariantComplete, matchingVariants } from '@type-arena/typing-engine';
 import HeroSprite from '../components/HeroSprite';
 import type { PlayerRank } from '../game/rank';
@@ -14,6 +14,10 @@ type BattleView = {
   character: CharacterId;
   ownHp: number;
   opponentHp: number;
+  ownMp: number;
+  opponentMp: number;
+  growth: GrowthLevels;
+  spellReadyAt: number;
   prompt: { id: string; text: string; reading: string; category: string };
   completedPrompts: number;
   typed: string;
@@ -27,6 +31,7 @@ type BattleView = {
 type Props = {
   rank: PlayerRank | null;
   onRankChange: () => Promise<void>;
+  onGrowthChange: () => Promise<void>;
   onRanking: () => void;
   user: User | null;
   apiReady: boolean;
@@ -41,8 +46,14 @@ function progressColor(value: number) {
   return { width: `${Math.max(0, Math.min(100, value))}%` };
 }
 
-export default function OnlineArena({ rank, onRankChange, onRanking, user, apiReady, login, guestLogin, onBack }: Props) {
+export default function OnlineArena({ rank, onRankChange, onGrowthChange, onRanking, user, apiReady, login, guestLogin, onBack }: Props) {
   const socketRef = useRef<Socket | null>(null);
+  const rankRefreshRef = useRef(onRankChange);
+  const growthRefreshRef = useRef(onGrowthChange);
+  rankRefreshRef.current = onRankChange;
+  growthRefreshRef.current = onGrowthChange;
+  const typingRef = useRef<HTMLInputElement>(null);
+  const [magicNotice, setMagicNotice] = useState<string | null>(null);
   const submittedRef = useRef(false);
   const submitAnswerRef = useRef<(answer: string) => void>(() => undefined);
   const [connected, setConnected] = useState(false);
@@ -115,7 +126,7 @@ export default function OnlineArena({ rank, onRankChange, onRanking, user, apiRe
       socket.on('battle:starting', (view: BattleView | null) => {
         if (!view) { setError('対戦状態を取得できませんでした。'); return; }
         submittedRef.current = false;
-        setSubmitted(false); setBattle(view); setTyped(view.typed); setAccuracy(view.accuracy); setMistakes(view.mistakes); setMaxCombo(view.maxCombo); setFinalStats(null); setOutcome(null); setError(null);
+        setMagicNotice(null); setSubmitted(false); setBattle(view); setTyped(view.typed); setAccuracy(view.accuracy); setMistakes(view.mistakes); setMaxCombo(view.maxCombo); setFinalStats(null); setOutcome(null); setError(null);
       });
       socket.on('battle:update', (view: BattleView) => {
         if (battleRef.current?.prompt.id !== view.prompt.id) { submittedRef.current = false; setSubmitted(false); setTyped(''); setAccuracy(100); setMistakes(0); }
@@ -126,6 +137,13 @@ export default function OnlineArena({ rank, onRankChange, onRanking, user, apiRe
         setTyped(data.typed); setAccuracy(data.accuracy); setMistakes(data.mistakes); setMaxCombo(data.maxCombo); setError(null);
         const candidates = prompts.find((item) => item.id === data.promptId)?.romaji ?? [];
         if (isAnyVariantComplete(candidates, data.typed)) submitAnswerRef.current(data.typed);
+      });
+      socket.on('battle:spell-error', (data: { code?: string }) => {
+        const messages: Record<string, string> = { 'insufficient-mp': 'MPが足りません。入力成功で回復します。', 'spell-cooldown': '魔法の再使用まで少し待ってください。', 'battle-not-started': '開始の合図を待っています。', 'battle-finished': 'この対戦は終了しています。' };
+        setMagicNotice(messages[data.code ?? ''] ?? '魔法を使えませんでした。');
+      });
+      socket.on('battle:damage', (data: { damage: number; type?: string }) => {
+        if (data.type === 'magic') setMagicNotice(`魔法攻撃 ${data.damage} ダメージ`);
       });
       socket.on('battle:error', (data: { code?: string }) => {
         submittedRef.current = false;
@@ -143,12 +161,12 @@ export default function OnlineArena({ rank, onRankChange, onRanking, user, apiRe
         };
         setError(messages[data.code ?? ''] ?? '対戦中にエラーが発生しました。');
       });
-      socket.on('battle:finished', (data: { result?: 'win' | 'lose' | 'draw'; mode?: 'ranked' | 'private'; resultSaved?: boolean; ratingChange?: number; coins?: number; stats?: { wpm: number; accuracy: number; characters: number; mistakes: number; maxCombo: number } }) => {
-        if (data.resultSaved) void onRankChange();
+      socket.on('battle:finished', (data: { result?: 'win' | 'lose' | 'draw'; mode?: 'ranked' | 'private'; resultSaved?: boolean; ratingChange?: number; coins?: number; growthPoints?: number; stats?: { wpm: number; accuracy: number; characters: number; mistakes: number; maxCombo: number } }) => {
+        if (data.resultSaved) { void rankRefreshRef.current(); void growthRefreshRef.current(); }
         setOutcome(data.result === 'draw' ? 'draw' : data.result === 'win' ? 'win' : 'lose'); setQueued(false); setTyped('');
         if (data.stats) { setFinalStats(data.stats); setAccuracy(data.stats.accuracy); setMistakes(data.stats.mistakes); setMaxCombo(data.stats.maxCombo); }
         if (data.resultSaved && data.mode === 'private') setError('結果を保存しました。レート変動なし / コイン報酬なし');
-        else if (data.resultSaved) setError(`記録を保存しました。レート ${data.ratingChange !== undefined && data.ratingChange >= 0 ? '+' : ''}${data.ratingChange ?? 0} / コイン +${data.coins ?? 0}`);
+        else if (data.resultSaved) setError(`記録を保存しました。レート ${data.ratingChange !== undefined && data.ratingChange >= 0 ? '+' : ''}${data.ratingChange ?? 0} / コイン +${data.coins ?? 0} / 強化 +${data.growthPoints ?? 0} PT`);
         else setError('対戦結果をサーバーへ保存できませんでした。報酬は確定していません。');
       });
       socket.on('battle:persistence-error', () => setError('対戦結果をサーバーへ保存できませんでした。報酬は確定していません。'));
@@ -158,7 +176,7 @@ export default function OnlineArena({ rank, onRankChange, onRanking, user, apiRe
       socket?.disconnect();
       socketRef.current = null;
     };
-  }, [user, onRankChange]);
+  }, [user]);
 
   useEffect(() => {
     if (!battle || outcome) return;
@@ -200,9 +218,10 @@ export default function OnlineArena({ rank, onRankChange, onRanking, user, apiRe
       : battle ? <section className="online-battle">
         <div className="online-battle-meta"><span><i className="live-dot"/> {battle.mode === 'private' ? 'PRIVATE BATTLE' : 'SERVER-VERIFIED RANKED BATTLE'}</span><span><Clock3 size={13}/> {String(Math.floor(seconds / 60)).padStart(2,'0')}:{String(seconds % 60).padStart(2,'0')}</span></div>
         <div className="online-combatants"><div className="online-combatant rival"><div className="fighter-label"><span className="rival-hero-avatar"><HeroSprite className="rival-hero-sprite" character={battle.opponent.character} /></span><div><b>{battle.opponent.displayName}</b><small>{characters[battle.opponent.character]?.name ?? '勇者'} / RATING {battle.opponent.rating}</small></div><span className="fighter-tag">RIVAL</span></div><div className="online-hp-label"><span><Heart size={13}/> HP {Math.ceil(battle.opponentHp)} / 100</span></div><div className="progress"><span style={progressColor(battle.opponentHp)}/></div></div><div className="online-vs">VS</div><div className="online-combatant self"><div className="fighter-label"><span className="online-hero-avatar"><HeroSprite character={battle.character} /></span><div><b>{user.displayName || 'プレイヤー'}</b><small>{characters[battle.character]?.name ?? '勇者'} / RATING SYNCED</small></div><span className="fighter-tag you-tag">YOU</span></div><div className="online-hp-label"><span><Heart size={13}/> HP {Math.ceil(battle.ownHp)} / 100</span></div><div className="progress cyan"><span style={progressColor(battle.ownHp)}/></div></div></div>
-        <div className="online-prompt-panel"><span className="section-kicker">{battle.prompt.category} / PROMPT {String(battle.completedPrompts + 1).padStart(2,'0')}</span><h1>{battle.prompt.text}</h1><p>{battle.prompt.reading}</p><div className="romaji-line">{[...(matchingVariants(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed)[0] ?? prompts.find((item) => item.id === battle.prompt.id)?.romaji[0] ?? '')].map((char, index) => <span key={`${battle.prompt.id}-${index}`} className={index < typed.length ? 'typed-char' : index === typed.length ? 'next-char' : ''}>{char}</span>)}</div>{countdown > 0 && <div className="battle-countdown">BATTLE STARTS IN {countdown}</div>}<input className="typing-input" value={typed} onKeyDown={onType} onChange={() => undefined} disabled={submitted || countdown > 0} autoComplete="off" autoCapitalize="off" spellCheck={false} placeholder={countdown ? '開始までお待ちください' : `「${battle.prompt.reading}」をローマ字で入力`} aria-label="対戦ローマ字入力" autoFocus/><div className="online-input-stats">正確率 <b>{accuracy}%</b><span>ミス {mistakes}</span><span>最大コンボ {maxCombo}</span></div>{submitted && <div className="waiting-hit"><LoaderCircle size={14}/> サーバーで回答を検証中…</div>}{typed.length > 0 && isAnyVariantComplete(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed) && !submitted && <button className="primary-button online-submit" onClick={() => submitAnswer(typed)}>回答を送信</button>}</div>
+        <div className="online-prompt-panel"><span className="section-kicker">{battle.prompt.category} / PROMPT {String(battle.completedPrompts + 1).padStart(2,'0')}</span><h1>{battle.prompt.text}</h1><p>{battle.prompt.reading}</p><div className="romaji-line">{[...(matchingVariants(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed)[0] ?? prompts.find((item) => item.id === battle.prompt.id)?.romaji[0] ?? '')].map((char, index) => <span key={`${battle.prompt.id}-${index}`} className={index < typed.length ? 'typed-char' : index === typed.length ? 'next-char' : ''}>{char}</span>)}</div>{countdown > 0 && <div className="battle-countdown">BATTLE STARTS IN {countdown}</div>}<input ref={typingRef} className="typing-input" value={typed} onKeyDown={onType} onChange={() => undefined} disabled={submitted || countdown > 0} autoComplete="off" autoCapitalize="off" spellCheck={false} placeholder={countdown ? '開始までお待ちください' : `「${battle.prompt.reading}」をローマ字で入力`} aria-label="対戦ローマ字入力" autoFocus/><div className="online-input-stats">正確率 <b>{accuracy}%</b><span>ミス {mistakes}</span><span>最大コンボ {maxCombo}</span></div>{submitted && <div className="waiting-hit"><LoaderCircle size={14}/> サーバーで回答を検証中…</div>}{typed.length > 0 && isAnyVariantComplete(prompts.find((item) => item.id === battle.prompt.id)?.romaji ?? [], typed) && !submitted && <button className="primary-button online-submit" onClick={() => submitAnswer(typed)}>回答を送信</button>}</div>
+        <div className="online-magic-panel"><div><b>MP {battle.ownMp} / {MAX_MP}</b><span>魔攻 {magicAttackValue(battle.character, battle.growth.magicAttack)} ・ 魔防 {magicDefenseValue(battle.character, battle.growth.magicDefense)} ・ 相手 MP {battle.opponentMp}/{MAX_MP}</span></div><button className="secondary-button" disabled={countdown > 0 || submitted || battle.ownMp < SPELL_COST || clock < battle.spellReadyAt} onMouseDown={(event) => event.preventDefault()} onClick={() => { socketRef.current?.emit('battle:spell', { matchId: battle.matchId }); typingRef.current?.focus(); }}><WandSparkles size={16}/> 魔法攻撃 <small>{SPELL_COST} MP</small></button>{magicNotice && <span role="status">{magicNotice}</span>}</div>
         {error && <div className="online-error" role="status"><CircleAlert size={14}/>{error}</div>}
-        <div className="online-footnote">入力をサーバーで検証し、ダメージと勝敗を計算します。最高速度は300 WPMに制限されます。</div>
+        <div className="online-footnote">入力成功でMPが3回復。魔法は10 MP消費し、再使用まで2.5秒かかります。入力とダメージはサーバーで検証します。</div>
       </section> : <section className="online-gate"><div className="online-gate-icon"><Search size={25}/></div><span className="section-kicker">ONLINE MATCH</span><h1>対戦相手を探す</h1><p>{connected ? 'ランクマッチ、または4桁コードでプライベート戦に参加できます。' : '対戦サーバーへ接続しています。'}</p>{rank && <p>{rank.title} ・ レート {rank.rating}{rank.placementMatches < rank.placementRequired ? ` ・ 振り分け戦 ${rank.placementMatches}/${rank.placementRequired}` : ` ・ 全体 ${rank.position}位`}</p>}<button className="text-link" onClick={onRanking}>オンラインランキングを見る</button>{queued ? <><div className="queue-wait"><LoaderCircle size={20}/> マッチング待機中 <span>待機列 {queuePosition}</span></div><button className="secondary-button" onClick={() => socketRef.current?.emit('matchmaking:cancel')}>キャンセル</button></> : <button className="primary-button" disabled={!connected} onClick={() => {setError(null);socketRef.current?.emit('matchmaking:join')}}><Search size={16}/> ランクマッチ開始</button>}<div className="online-actions" style={{marginTop:16}}><button className="secondary-button" disabled={!connected} onClick={() => { setIssuedCode(''); socketRef.current?.emit('private:create'); }}>コードを発行</button><input aria-label="4桁コード" inputMode="numeric" maxLength={4} placeholder="0123" value={privateCode} onChange={(event) => setPrivateCode(event.target.value.replace(/\D/g, '').slice(0,4))}/><button className="secondary-button" disabled={!connected || privateCode.length !== 4} onClick={() => socketRef.current?.emit('private:join', {code:privateCode})}>参加</button></div>{issuedCode && <p>対戦コード: <b>{issuedCode}</b>（10分有効）を相手に共有してください。</p>}{error && <div className="online-error" role="status"><CircleAlert size={14}/>{error}</div>}<div className="match-note">プライベート戦は戦績だけ保存し、レートとコインは変動しません。</div></section>}
   </main>;
 }
