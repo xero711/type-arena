@@ -8,7 +8,6 @@ import { users } from './database/schema.js';
 import { Matchmaker, type QueueEntry } from './matchmaking/matchmaker.js';
 import { createPrivateMatchId, PrivateMatchmaker, type PrivateMatchInvite } from './matchmaking/private-matches.js';
 import { z } from 'zod';
-import { isCharacterId } from '@type-arena/game-data';
 import { BattleManager, type BattleOutcome } from './battles/battle-manager.js';
 import { persistBattleOutcome, type MatchMode } from './battles/result-service.js';
 
@@ -151,9 +150,9 @@ export function attachRealtime(httpServer: HttpServer) {
     socket.on('matchmaking:join', async () => {
       if (activeMatches.has(firebaseUid)) return socket.emit('matchmaking:error', { code: 'already-in-match' });
       if (!db) return socket.emit('matchmaking:error', { code: 'database-not-configured' });
-      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string } | undefined;
+      let profile: { userId: string; displayName: string; rating: number } | undefined;
       try {
-        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter })
+        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating })
           .from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
       } catch {
         return socket.emit('matchmaking:error', { code: 'database-unavailable' });
@@ -168,7 +167,6 @@ export function attachRealtime(httpServer: HttpServer) {
         socketId: socket.id,
         displayName: profile.displayName,
         rating: profile.rating,
-        character: isCharacterId(profile.selectedCharacter) ? profile.selectedCharacter : 'balanced',
         queuedAt: Date.now(),
       });
       if (result.kind === 'already-queued') return socket.emit('matchmaking:error', { code: 'already-queued' });
@@ -188,9 +186,9 @@ export function attachRealtime(httpServer: HttpServer) {
       const cancelled = matchmaker.removeUser(firebaseUid);
       if (cancelled) socket.emit('matchmaking:cancelled', { cancelled: true });
 
-      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string } | undefined;
+      let profile: { userId: string; displayName: string; rating: number } | undefined;
       try {
-        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter })
+        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating })
           .from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
       } catch {
         return emitPrivateError(socket.id, 'database-unavailable');
@@ -205,7 +203,6 @@ export function attachRealtime(httpServer: HttpServer) {
         socketId: socket.id,
         displayName: profile.displayName,
         rating: profile.rating,
-        character: isCharacterId(profile.selectedCharacter) ? profile.selectedCharacter : 'balanced',
         queuedAt: Date.now(),
       });
       socket.emit('private:created', { code: invite.code, expiresAt: invite.expiresAt });
@@ -229,9 +226,9 @@ export function attachRealtime(httpServer: HttpServer) {
         return emitPrivateError(socket.id, 'host-offline');
       }
 
-      let profile: { userId: string; displayName: string; rating: number; selectedCharacter: string } | undefined;
+      let profile: { userId: string; displayName: string; rating: number } | undefined;
       try {
-        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating, selectedCharacter: users.selectedCharacter })
+        [profile] = await db.select({ userId: users.id, displayName: users.displayName, rating: users.rating })
           .from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
       } catch {
         return emitPrivateError(socket.id, 'database-unavailable');
@@ -251,7 +248,6 @@ export function attachRealtime(httpServer: HttpServer) {
         socketId: socket.id,
         displayName: profile.displayName,
         rating: profile.rating,
-        character: isCharacterId(profile.selectedCharacter) ? profile.selectedCharacter : 'balanced',
         queuedAt: Date.now(),
       };
       await startMatch(createPrivateMatchId(), [consumed.host, joiner], 'private');
