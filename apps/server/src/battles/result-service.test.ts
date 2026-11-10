@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calculateRatingChanges, calculateSettlement, MATCH_REWARD } from './result-service.js';
+import { rankName } from '@type-arena/game-data';
 import type { BattleOutcome } from './battle-manager.js';
 
 describe('ranked match settlement rules', () => {
@@ -15,6 +16,35 @@ describe('ranked match settlement rules', () => {
     const [favoredGain] = calculateRatingChanges([1400, 1000], 0);
     const [upsetGain] = calculateRatingChanges([1000, 1400], 0);
     expect(upsetGain).toBeGreaterThan(favoredGain);
+  });
+});
+
+describe('rank thresholds and placements', () => {
+  it.each([
+    [0, 'ルーキー'], [249, 'ルーキー'], [250, 'ブロンズ'], [499, 'ブロンズ'],
+    [500, 'シルバー'], [749, 'シルバー'], [750, 'ゴールド'], [999, 'ゴールド'],
+    [1000, 'プラチナ'], [1249, 'プラチナ'], [1250, 'プロ'], [1499, 'プロ'],
+    [1500, 'タイプマスター'], [1749, 'タイプマスター'], [1750, 'タイプキング #42'],
+  ])('assigns rating %i to %s', (rating, title) => {
+    expect(rankName(rating, 5, 42)).toBe(title);
+  });
+
+  it('hides the rank until the fifth placement and handles draws by opponent rating', () => {
+    expect(rankName(1750, 4, 1)).toBe('未認定');
+    expect(calculateRatingChanges([500, 700], null)[0]).toBeGreaterThan(0);
+    expect(calculateRatingChanges([700, 500], null)[0]).toBeLessThan(0);
+  });
+
+  it('never lets a ranked loss reduce rating below zero', () => {
+    const outcome: BattleOutcome = {
+      matchId: 'floor', winnerUid: 'two', loserUid: 'one', reason: 'knockout', finishedAt: 0,
+      players: [
+        { firebaseUid: 'one', userId: 'one', rating: 0, wpm: 0, accuracy: 0, characters: 0, mistakes: 0, maxCombo: 0 },
+        { firebaseUid: 'two', userId: 'two', rating: 0, wpm: 0, accuracy: 0, characters: 0, mistakes: 0, maxCombo: 0 },
+      ],
+    };
+    expect(calculateSettlement(outcome, [0, 0]).ratings).toEqual([0, 16]);
+    expect(calculateSettlement(outcome, [0, 0]).ratingChanges).toEqual([0, 16]);
   });
 });
 

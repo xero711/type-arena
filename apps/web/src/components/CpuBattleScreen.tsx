@@ -1,12 +1,13 @@
 import type { ChangeEvent, CSSProperties, RefObject } from 'react';
 import { Heart, Keyboard, Sparkles, Swords, WandSparkles } from 'lucide-react';
-import type { Prompt } from '@type-arena/game-data';
+import { characters, type CharacterId, type Prompt } from '@type-arena/game-data';
 import { matchingVariants } from '@type-arena/typing-engine';
 import background from '../assets/market-battle-bg.png';
 import enemySprite from '../assets/shadow-imp-v2.png';
 import HeroSprite from './HeroSprite';
 
 type Props = {
+  character: CharacterId;
   prompt: Prompt;
   promptIndex: number;
   typed: string;
@@ -35,7 +36,7 @@ function HpBar({ value, tone }: { value: number; tone: 'hero' | 'enemy' }) {
 
 export default function CpuBattleScreen(props: Props) {
   const {
-    prompt, promptIndex, typed, hp, mp, enemyHp, potions, elapsed, wpm,
+    character, prompt, promptIndex, typed, hp, mp, enemyHp, potions, elapsed, wpm,
     accuracy, errors, attack, defense, inputRef, onType,
     onBack, onAttack, onMagic, onPotion, onFlee,
   } = props;
@@ -53,8 +54,8 @@ export default function CpuBattleScreen(props: Props) {
       </header>
 
       <div className="retro-character hero-character">
-        <div className="retro-nameplate hero-nameplate"><b>勇者</b><span>攻撃 Lv.{attack} / 防御 Lv.{defense}</span></div>
-        <HeroSprite />
+        <div className="retro-nameplate hero-nameplate"><b>{characters[character].name}</b><span>攻撃 Lv.{attack} / 防御 Lv.{defense}</span></div>
+        <HeroSprite character={character} />
         <div className="retro-floor-shadow" />
       </div>
       <div className="retro-character enemy-character">

@@ -1540,3 +1540,6 @@ select:focus-visible {
     grid-column: 2;
   }
 }
+
+/* 長文のローマ字も画面幅に収める。 */
+.retro-romaji, .online-prompt-panel .romaji-line { overflow-wrap: anywhere; word-break: break-word; }

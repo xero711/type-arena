@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prompts } from '@type-arena/game-data';
+import { characterDamage, prompts } from '@type-arena/game-data';
 import { BattleManager, type BattleOutcome, type BattlePlayer } from './battle-manager.js';
 
 const players: [BattlePlayer, BattlePlayer] = [
@@ -40,6 +40,41 @@ describe('server-authoritative battle', () => {
     expect(outcome?.players[0]).toMatchObject({ accuracy: 100, maxCombo: expect.any(Number) });
     expect(outcome?.players[0].maxCombo).toBeGreaterThan(0);
     expect(battle.submit('match-2', 'uid-a', 'p1', now)).toMatchObject({ ok: false, code: 'battle-finished' });
+  });
+
+  it('accepts mixed common romaji spellings throughout long prompts', () => {
+    const prompt = prompts.find((item) => item.id === 'long4')!;
+    expect(prompt.romaji).toContain('atarasiisekaihemukatteyuukiwodashitesusumu');
+    expect(prompt.romaji).toContain('atarashiisekaihemukatteyuukiwodasitesusumu');
+    expect(prompt.romaji).toContain('atarashiisekaihemukaxtuteyuukiwodashitesusumu');
+  });
+
+  it('gives players using the same character the same first prompt', () => {
+    const battle = new BattleManager();
+    battle.create('same-character', players, 0, 0);
+    expect(battle.snapshot('same-character', 'uid-a')!.prompt.id).toBe(battle.snapshot('same-character', 'uid-b')!.prompt.id);
+  });
+
+  it('gives each character its own prompts and applies damage only on completion', () => {
+    const battle = new BattleManager();
+    battle.create('characters', [{ ...players[0], character: 'long' }, { ...players[1], character: 'word' }], 0, 0);
+    const longView = battle.snapshot('characters', 'uid-a')!;
+    const wordView = battle.snapshot('characters', 'uid-b')!;
+    expect(longView).toMatchObject({ character: 'long', opponent: { character: 'word' }, prompt: { category: '長文' } });
+    expect(wordView).toMatchObject({ character: 'word', opponent: { character: 'long' }, prompt: { category: '単語' } });
+    const longAnswer = prompts.find((prompt) => prompt.id === longView.prompt.id)!.romaji[0];
+    const wordAnswer = prompts.find((prompt) => prompt.id === wordView.prompt.id)!.romaji[0];
+    [...longAnswer.slice(0, -1)].forEach((key, index) => battle.typeKey('characters', 'uid-a', longView.prompt.id, key, (index + 1) * 100));
+    expect(battle.submit('characters', 'uid-a', longView.prompt.id, longAnswer.length * 100)).toMatchObject({ ok: false, code: 'incomplete-input' });
+    expect(battle.snapshot('characters', 'uid-b')!.ownHp).toBe(100);
+    battle.typeKey('characters', 'uid-a', longView.prompt.id, longAnswer.at(-1)!, longAnswer.length * 100);
+    const longResult = battle.submit('characters', 'uid-a', longView.prompt.id, longAnswer.length * 100);
+    [...wordAnswer].forEach((key, index) => battle.typeKey('characters', 'uid-b', wordView.prompt.id, key, (index + 1) * 100));
+    const wordResult = battle.submit('characters', 'uid-b', wordView.prompt.id, wordAnswer.length * 100);
+    expect(longResult).toMatchObject({ ok: true, damage: characterDamage(22, 'long') });
+    expect(wordResult).toMatchObject({ ok: true, damage: characterDamage(22, 'word') });
+    expect(characterDamage(22, 'word')).toBeLessThan(characterDamage(22, 'balanced'));
+    expect(characterDamage(22, 'long')).toBeGreaterThan(characterDamage(22, 'balanced'));
   });
 
   it('includes the players partial input in a resumable server snapshot', () => {

@@ -12,8 +12,10 @@ export const users = pgTable('users', {
   firebaseUid: text('firebase_uid').notNull().unique(),
   displayName: text('display_name').notNull(),
   photoUrl: text('photo_url'),
-  rating: integer('rating').notNull().default(1200),
+  rating: integer('rating').notNull().default(500),
+  placementMatches: integer('placement_matches').notNull().default(0),
   coins: integer('coins').notNull().default(0),
+  selectedCharacter: text('selected_character').notNull().default('balanced'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

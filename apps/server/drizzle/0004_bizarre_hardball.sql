@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "selected_character" text DEFAULT 'balanced' NOT NULL;

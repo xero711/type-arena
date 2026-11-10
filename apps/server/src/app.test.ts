@@ -34,6 +34,12 @@ describe('authentication boundary', () => {
     expect(response.json()).toEqual({ error: 'missing-token' });
   });
 
+  it('requires authentication for character ownership and purchases', async () => {
+    const app = await appPromise;
+    expect((await app.inject({ method: 'GET', url: '/api/me/characters' })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'POST', url: '/api/me/characters', payload: { character: 'long', action: 'unlock' } })).statusCode).toBe(401);
+  });
+
   it('rejects profile reads without a Firebase token', async () => {
     const response = await (await appPromise).inject({ method: 'GET', url: '/api/me' });
     expect(response.statusCode).toBe(401);

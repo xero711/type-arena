@@ -30,3 +30,9 @@
 @keyframes gacha-reveal-card{from{opacity:0;transform:translateY(14px) scale(.86)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes gacha-halo{from{opacity:.38}to{opacity:.85}}
 @media(prefers-reduced-motion:reduce){.gacha-capsule.shaking .gacha-capsule-shell,.gacha-reveal-item,.gacha-results.gacha-rarity-ultimate_rare::before{animation:none}}
+
+.guild-ranking-row{grid-template-columns:42px 30px minmax(70px,1fr) minmax(95px,135px) 70px}.guild-ranking-row small{font-size:10px;line-height:1.4;overflow-wrap:anywhere}@media(max-width:650px){.guild-ranking-row{grid-template-columns:25px 24px minmax(45px,1fr) minmax(80px,110px) 45px}.guild-ranking-row small{font-size:9px}}
+
+.rank-explanation{color:#a9b9cc;font-size:11px;line-height:1.6}.rank-tier-list{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 18px}.rank-tier-list span{padding:5px 8px;border:1px solid #3a485b;border-radius:3px;color:#a8b8ca;font-size:10px}.rank-tier-list b{color:#f0d18a}
+
+.ranking-pagination{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:16px;color:#a8b8ca;font-size:10px}.ranking-pagination button:disabled{opacity:.4;cursor:not-allowed}

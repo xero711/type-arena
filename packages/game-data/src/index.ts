@@ -22,7 +22,7 @@ function readingVariants(reading: string): string[] {
   return [...new Set(variants)];
 }
 
-export const prompts: Prompt[] = [
+export const balancedPrompts: Prompt[] = [
   { id: 'p1', text: '風を切り裂け', reading: 'かぜをきりさけ', romaji: ['kazewokirisake'], category: '冒険' },
   { id: 'p2', text: '星の彼方へ', reading: 'ほしのかなたへ', romaji: ['hoshinokanatahe', 'hoshinokanatae'], category: '宇宙' },
   { id: 'p3', text: '勝利をつかめ', reading: 'しょうりをつかめ', romaji: ['shouriwotsukame', 'syouriwotsukame', 'shoriwotsukame', 'syoriwotsukame', 'shouriwotukame', 'syouriwotukame'], category: 'バトル' },
@@ -32,6 +32,60 @@ export const prompts: Prompt[] = [
   { id: 'p7', text: '炎の守護者', reading: 'ほのおのしゅごしゃ', romaji: ['honoonoshugosha', 'honoonosyugosya', 'honoonoshugosya', 'honoonosyugosha'], category: 'バトル' },
   { id: 'p8', text: '月明かりの道', reading: 'つきあかりのみち', romaji: ['tsukiakarinomichi', 'tukiakarinomiti', 'tsukiakarinomiti', 'tukiakarinomichi'], category: '自然' }
 ];
+
+export const INITIAL_RATING = 500;
+export const PLACEMENT_MATCHES = 5;
+
+export const rankTiers = [
+  { min: 0, name: 'ルーキー' },
+  { min: 250, name: 'ブロンズ' },
+  { min: 500, name: 'シルバー' },
+  { min: 750, name: 'ゴールド' },
+  { min: 1000, name: 'プラチナ' },
+  { min: 1250, name: 'プロ' },
+  { min: 1500, name: 'タイプマスター' },
+  { min: 1750, name: 'タイプキング' },
+] as const;
+
+/** Rating thresholds are lower-inclusive; placements have no rank yet. */
+export function rankName(rating: number, placementMatches: number, leaderboardPosition?: number | null): string {
+  if (placementMatches < PLACEMENT_MATCHES) return '未認定';
+  const tier = [...rankTiers].reverse().find((entry) => rating >= entry.min) ?? rankTiers[0];
+  return tier.name === 'タイプキング' && leaderboardPosition != null ? `${tier.name} #${leaderboardPosition}` : tier.name;
+}
+
+export type CharacterId = 'balanced' | 'long' | 'word';
+export const characters: Record<CharacterId, { name: string; description: string; damageMultiplier: number; price: number }> = {
+  balanced: { name: '勇者', description: 'バランスのよい問題とダメージ', damageMultiplier: 1, price: 0 },
+  long: { name: '炎の戦士', description: '長文を打ち切ると大ダメージ', damageMultiplier: 1.8, price: 500 },
+  word: { name: '疾風の剣士', description: '単語だけ出題されるがダメージは低い', damageMultiplier: 0.55, price: 500 },
+};
+export function isCharacterId(value: unknown): value is CharacterId {
+  return typeof value === 'string' && Object.hasOwn(characters, value);
+}
+export function characterDamage(base: number, character: CharacterId): number {
+  return Math.max(1, Math.round(base * characters[character].damageMultiplier));
+}
+const longPrompts: Prompt[] = [
+  { id: 'long1', text: '青い空を見上げて未来への道を進もう', reading: 'あおいそらをみあげてみらいへのみちをすすもう', romaji: ['aoisorawomiagetemiraihenomichiwosusumou'], category: '長文' },
+  { id: 'long2', text: '仲間と力を合わせて大きな夢をかなえよう', reading: 'なかまとちからをあわせておおきなゆめをかなえよう', romaji: ['nakamatochikarawoawaseteookinayumewokanaeyou'], category: '長文' },
+  { id: 'long3', text: '静かな森を抜けると光の海が広がる', reading: 'しずかなもりをぬけるとひかりのうみがひろがる', romaji: ['shizukanamoriwonukerutohikarinoumigahirogaru', 'sizukanamoriwonukerutohikarinoumigahirogaru'], category: '長文' },
+  { id: 'long4', text: '新しい世界へ向かって勇気を出して進む', reading: 'あたらしいせかいへむかってゆうきをだしてすすむ', romaji: ['atarashiisekaihemukatteyuukiwodashitesusumu', 'atarasiisekaihemukatteyuukiwodasitesusumu'], category: '長文' },
+];
+const wordPrompts: Prompt[] = [
+  { id: 'word1', text: '空', reading: 'そら', romaji: ['sora'], category: '単語' },
+  { id: 'word2', text: '剣', reading: 'けん', romaji: ['ken'], category: '単語' },
+  { id: 'word3', text: '光', reading: 'ひかり', romaji: ['hikari'], category: '単語' },
+  { id: 'word4', text: '勇気', reading: 'ゆうき', romaji: ['yuuki'], category: '単語' },
+  { id: 'word5', text: '魔法', reading: 'まほう', romaji: ['mahou'], category: '単語' },
+  { id: 'word6', text: '星', reading: 'ほし', romaji: ['hoshi', 'hosi'], category: '単語' },
+  { id: 'word7', text: '未来', reading: 'みらい', romaji: ['mirai'], category: '単語' },
+  { id: 'word8', text: '風', reading: 'かぜ', romaji: ['kaze'], category: '単語' },
+];
+export const prompts: Prompt[] = [...balancedPrompts, ...longPrompts, ...wordPrompts];
+export function promptsForCharacter(character: CharacterId): Prompt[] {
+  return character === 'long' ? longPrompts : character === 'word' ? wordPrompts : balancedPrompts;
+}
 
 for (const prompt of prompts) prompt.romaji = [...new Set([...prompt.romaji, ...readingVariants(prompt.reading)])];
 

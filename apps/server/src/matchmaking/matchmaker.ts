@@ -6,6 +6,7 @@ export type QueueEntry = {
   socketId: string;
   displayName: string;
   rating: number;
+  character?: import('@type-arena/game-data').CharacterId;
   queuedAt: number;
 };
 
