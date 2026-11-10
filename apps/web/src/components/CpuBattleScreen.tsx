@@ -4,7 +4,6 @@ import type { Prompt } from '@type-arena/game-data';
 import { matchingVariants } from '@type-arena/typing-engine';
 import background from '../assets/market-battle-bg.png';
 import enemySprite from '../assets/shadow-imp-v2.png';
-import { resolveHeroAppearance } from '../game/hero-appearance';
 import HeroSprite from './HeroSprite';
 
 type Props = {
@@ -19,11 +18,10 @@ type Props = {
   wpm: number;
   accuracy: number;
   errors: number;
-  armorId: string;
-  weaponId: string;
+  attack: number;
+  defense: number;
   inputRef: RefObject<HTMLInputElement | null>;
   onType: (event: ChangeEvent<HTMLInputElement>) => void;
-  onOpenEquipment: () => void;
   onBack: () => void;
   onAttack: () => void;
   onMagic: () => void;
@@ -38,10 +36,9 @@ function HpBar({ value, tone }: { value: number; tone: 'hero' | 'enemy' }) {
 export default function CpuBattleScreen(props: Props) {
   const {
     prompt, promptIndex, typed, hp, mp, enemyHp, potions, elapsed, wpm,
-    accuracy, errors, armorId, weaponId, inputRef, onType, onOpenEquipment,
+    accuracy, errors, attack, defense, inputRef, onType,
     onBack, onAttack, onMagic, onPotion, onFlee,
   } = props;
-  const hero = resolveHeroAppearance(armorId, weaponId);
   const matching = matchingVariants(prompt.romaji, typed);
   const target = matching[0] ?? prompt.romaji[0];
   const progress = target ? Math.round((typed.length / target.length) * 100) : 0;
@@ -56,8 +53,8 @@ export default function CpuBattleScreen(props: Props) {
       </header>
 
       <div className="retro-character hero-character">
-        <div className="retro-nameplate hero-nameplate"><b>勇者</b><span>{hero.armor.name} / {hero.weapon.name}</span></div>
-        <HeroSprite armor={hero.armor} weapon={hero.weapon} />
+        <div className="retro-nameplate hero-nameplate"><b>勇者</b><span>攻撃 Lv.{attack} / 防御 Lv.{defense}</span></div>
+        <HeroSprite />
         <div className="retro-floor-shadow" />
       </div>
       <div className="retro-character enemy-character">
@@ -83,14 +80,14 @@ export default function CpuBattleScreen(props: Props) {
       <div className="retro-commands">
         <button onClick={onAttack}><Swords size={16} />こうげき</button>
         <button onClick={onMagic} disabled={mp < 10}><WandSparkles size={16} />まほう <small>10 MP</small></button>
-        <button onClick={onPotion} disabled={potions < 1 || hp >= 100}><Heart size={16} />アイテム <small>×{potions}</small></button>
+        <button onClick={onPotion} disabled={potions < 1 || hp >= 100}><Heart size={16} />かいふく <small>×{potions}</small></button>
         <button onClick={onFlee}>にげる</button>
       </div>
       <div className="retro-status">
         <div className="retro-status-block hero-status">
-          <div className="retro-status-heading"><b>勇者</b><label>YOU</label><button className="retro-open-equipment" onClick={onOpenEquipment}>そうび</button></div>
-          <div className="retro-equipment-caption" title={`防具：${hero.armor.name} / 武器：${hero.weapon.name}`}>
-            防具 DEF {hero.armor.defense}　武器 ATK {hero.weapon.attack}
+          <div className="retro-status-heading"><b>勇者</b><label>YOU</label></div>
+          <div className="retro-equipment-caption">
+            攻撃 Lv.{attack}　防御 Lv.{defense}
           </div>
           <div className="retro-stat-line"><span>HP</span><HpBar value={hp} tone="hero" /><b>{Math.ceil(hp)}/100</b></div>
           <div className="retro-stat-line mp-line"><span>MP</span><HpBar value={mp / 30 * 100} tone="hero" /><b>{mp}/30</b></div>

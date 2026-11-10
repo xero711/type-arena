@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { itemRarities } from '@type-arena/game-data';
 import { buildApp } from './app.js';
 import { readBearerToken } from './auth/bearer.js';
 
@@ -16,14 +15,10 @@ describe('authentication boundary', () => {
     expect(response.json()).toMatchObject({ status: 'ok', service: 'type-arena-api' });
   });
 
-  it('serves five armor and weapon choices at each rarity', async () => {
-    const response = await (await appPromise).inject({ method: 'GET', url: '/api/items' });
-    expect(response.statusCode).toBe(200);
-    const catalog = response.json().items as Array<{ type: string; rarity: string }>;
-    expect(catalog).toHaveLength(50);
-    for (const rarity of itemRarities) {
-      expect(catalog.filter((item) => item.type === 'armor' && item.rarity === rarity)).toHaveLength(5);
-      expect(catalog.filter((item) => item.type === 'weapon' && item.rarity === rarity)).toHaveLength(5);
+  it('does not expose retired item and gacha endpoints', async () => {
+    const app = await appPromise;
+    for (const [method, url] of [['GET', '/api/items'], ['GET', '/api/me/inventory'], ['POST', '/api/me/equipment'], ['POST', '/api/gacha/pull']] as const) {
+      expect((await app.inject({ method, url })).statusCode).toBe(404);
     }
   });
 

@@ -1,9 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { armorItems, weaponItems } from '@type-arena/game-data';
 import { db } from '../database/client.js';
-import { coinLedger, equipment, inventory, items, users } from '../database/schema.js';
+import { coinLedger, users } from '../database/schema.js';
 import { authenticateBearer } from '../auth/bearer.js';
 
 const updateProfileSchema = z.object({ displayName: z.string().trim().min(1).max(24) }).strict();
@@ -36,13 +35,6 @@ const profileRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!profile) throw new Error('profile-upsert-failed');
 
-      const starterCodes = [armorItems[0].code, weaponItems[0].code];
-      const starterItems = await tx.select({ id: items.id, code: items.code, type: items.type })
-        .from(items).where(inArray(items.code, starterCodes));
-      for (const item of starterItems) {
-        await tx.insert(inventory).values({ userId: profile.id, itemId: item.id, quantity: 1 }).onConflictDoNothing();
-        await tx.insert(equipment).values({ userId: profile.id, slot: item.type, itemId: item.id }).onConflictDoNothing();
-      }
       return profile;
     });
 
